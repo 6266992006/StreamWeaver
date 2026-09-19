@@ -1,6 +1,5 @@
-# Project Setup & Server Skeleton
-
-Node.js + Express server setup, MongoDB connection config, health-check route.
+ Project Setup & Server Skeleton
+ Node.js + Express server setup, MongoDB connection config, health-check route.
 
 ## Run
 

@@ -1,6 +1,6 @@
 # User Model + Sign Up API
 
-**Kaam:** Mongoose User schema, bcrypt password hashing, Sign Up API with JWT token response.
+** Mongoose User schema, bcrypt password hashing, Sign Up API with JWT token response.
 
 ## Run
 

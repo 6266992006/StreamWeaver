@@ -1,7 +1,7 @@
 {
-  "name": "streamweaver-day1",
-  "version": "1.0.0",
-  "description": "StreamWeaver Backend - Day 1: Project setup + Express server skeleton",
+  "name": "streamweaver-backend",
+  "version": "1.1.0",
+  "description": "StreamWeaver Backend - Week 1 complete: Express server + MongoDB connection + User/Dataset/TransformJob schemas",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

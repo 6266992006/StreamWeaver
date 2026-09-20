@@ -1,2 +1,19 @@
-# StreamWeaver
-A scalable, no-code ETL platform that enables efficient data uploading, transformation, mapping, and bulk processing of large datasets, leveraging Node.js Streams for high-performance data handling, React for an intuitive user interface, and MongoDB for scalable data management.
+# User Model + Sign Up API
+
+** Mongoose User schema, bcrypt password hashing, Sign Up API with JWT token response.
+
+## Run
+
+npm install
+cp .env.example .env   # set MONGO_URI + JWT_SECRET
+npm start
+
+MongoDB chalna chahiye is din ke liye (signup DB me likhta hai).
+
+## Test
+
+curl -X POST http://localhost:5000/api/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Mohan","email":"mohan@test.com","password":"secret123"}'
+
+Expected: `token` aur `user` object response me.

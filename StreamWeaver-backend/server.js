@@ -5,6 +5,11 @@ const helmet = require("helmet");
 
 const connectDB = require("./config/db");
 
+// Register models with Mongoose on boot (Week 1: User, Dataset, TransformJob)
+require("./models/User");
+require("./models/Dataset");
+require("./models/TransformJob");
+
 const app = express();
 
 app.use(cors());
@@ -12,12 +17,12 @@ app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- Day 1 deliverable: server boots + health check works ---
+// --- Week 1 deliverable: server boots, DB connects, schemas load ---
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Day 1)" });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 1 complete)" });
 });
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "ok", day: 1, timestamp: new Date().toISOString() });
+  res.json({ success: true, status: "ok", week: 1, timestamp: new Date().toISOString() });
 });
 
 app.use((req, res) => {

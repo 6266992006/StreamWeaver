@@ -1,19 +1,24 @@
-# User Model + Sign Up API
+# Sign In API + JWT Middleware
 
-Mongoose User schema, bcrypt password hashing, Sign Up API with JWT token response.
+ Login API (bcrypt.compare + JWT), JWT verification middleware, protected `/api/auth/me` route to prove it works.
 
 ## Run
-```bash
+
 npm install
-cp .env.example .env   # set MONGO_URI + JWT_SECRET
+cp .env.example .env
 npm start
-```
-MongoDB chalna chahiye is din ke liye (signup DB me likhta hai).
 
 ## Test
-```bash
-curl -X POST http://localhost:5000/api/auth/signup \
-  -H "Content-Type: application/json" \
+
+# 1. Signup (or use an existing user)
+curl -X POST http://localhost:5000/api/auth/signup -H "Content-Type: application/json" \
   -d '{"name":"Mohan","email":"mohan@test.com","password":"secret123"}'
-```
-Expected: `token` aur `user` object response me.
+
+# 2. Login -> copy the token from response
+curl -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" \
+  -d '{"email":"mohan@test.com","password":"secret123"}'
+
+# 3. Call protected route with the token
+curl http://localhost:5000/api/auth/me -H "Authorization: Bearer <token>"
+
+Expected: without token → 401. With valid token → your user details.

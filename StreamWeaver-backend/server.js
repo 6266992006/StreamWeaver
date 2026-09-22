@@ -14,14 +14,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Day 2)" });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Day 3)" });
 });
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "ok", day: 2, timestamp: new Date().toISOString() });
+  res.json({ success: true, status: "ok", day: 3, timestamp: new Date().toISOString() });
 });
 
-// --- Day 2 deliverable ---
-app.use("/api/auth", authRoutes); // POST /api/auth/signup
+// --- Day 3 deliverable ---
+app.use("/api/auth", authRoutes); // signup, login, protected /me
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });

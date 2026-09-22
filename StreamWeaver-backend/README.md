@@ -1,15 +1,19 @@
-# Project Setup & Server Skeleton
+# Day 2 — User Model + Sign Up API
 
-Node.js + Express server setup, MongoDB connection config, health-check route.
+**Kaam:** Mongoose User schema, bcrypt password hashing, Sign Up API with JWT token response.
 
 ## Run
-
+```bash
 npm install
-cp .env.example .env
+cp .env.example .env   # set MONGO_URI + JWT_SECRET
 npm start
+```
+MongoDB chalna chahiye is din ke liye (signup DB me likhta hai).
 
 ## Test
-
-curl http://localhost:5000/api/health
-
-Expected: `{"success":true,"status":"ok","day":1,...}`
+```bash
+curl -X POST http://localhost:5000/api/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Mohan","email":"mohan@test.com","password":"secret123"}'
+```
+Expected: `token` aur `user` object response me.

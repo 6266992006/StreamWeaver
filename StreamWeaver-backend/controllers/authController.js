@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const User = require("../models/User");
 
 const generateToken = (userId) => {
@@ -29,6 +30,7 @@ exports.signup = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const user = await User.create({ name, email, password: hashedPassword });
+
     const token = generateToken(user._id);
 
     return res.status(201).json({
@@ -73,6 +75,44 @@ exports.login = async (req, res) => {
   } catch (err) {
     console.error("Login error:", err.message);
     return res.status(500).json({ success: false, message: "Server error during login" });
+  }
+};
+
+// @route  POST /api/auth/forgot-password
+// Day 4 stub: generates a reset token and stores it. Actual email sending
+// wired up via utils/emailService.js (Week 4 task) — safe to call even
+// without SMTP configured, it just logs the link instead of sending.
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: "email is required" });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    // Always respond the same way so we don't leak which emails are registered
+    if (!user) {
+      return res.status(200).json({
+        success: true,
+        message: "If that email is registered, a reset link has been sent",
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    user.resetPasswordToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+    user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 minutes
+    await user.save();
+
+    const { sendPasswordResetEmail } = require("../utils/emailService");
+    await sendPasswordResetEmail(user.email, resetToken);
+
+    return res.status(200).json({
+      success: true,
+      message: "If that email is registered, a reset link has been sent",
+    });
+  } catch (err) {
+    console.error("Forgot password error:", err.message);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 

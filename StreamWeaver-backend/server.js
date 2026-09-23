@@ -20,7 +20,6 @@ app.get("/api/health", (req, res) => {
     res.json({ success: true, status: "ok", day: 1, timestamp: new Date().toISOString() });
 });
 
-// --- Day 3 deliverable ---
 app.use("/api/auth", authRoutes); // signup, login, protected /me
 
 app.use((req, res) => {

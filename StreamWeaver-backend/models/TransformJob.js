@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-// --- Week 1 (Day 3): TransformJob schema ---
+// --- Week 1: TransformJob schema ---
 // One document per "run" of a dataset through the mapping/transform
 // pipeline. Progress fields here are what the Week 3 WebSocket layer
 // will read from to push live updates to the frontend.

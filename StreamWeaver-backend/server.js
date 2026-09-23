@@ -4,6 +4,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 
 const connectDB = require("./config/db");
+const authRoutes = require("./routes/authRoutes");
 
 // Register models with Mongoose on boot (Week 1: User, Dataset, TransformJob)
 require("./models/User");
@@ -17,16 +18,28 @@ app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- Week 1 deliverable: server boots, DB connects, schemas load ---
+// --- Combined status: DB schemas (Week 1) + Auth routes (Day 3) both live ---
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 1 complete)" });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀" });
 });
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "ok", week: 1, timestamp: new Date().toISOString() });
+  res.json({
+    success: true,
+    status: "ok",
+    week: 2,
+    timestamp: new Date().toISOString(),
+  });
 });
+
+app.use("/api/auth", authRoutes); // signup, login, protected /me
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });
+});
+
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err.message);
+  res.status(500).json({ success: false, message: "Internal server error" });
 });
 
 const PORT = process.env.PORT || 5000;

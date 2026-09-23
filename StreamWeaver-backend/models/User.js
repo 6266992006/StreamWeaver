@@ -1,29 +1,36 @@
 const mongoose = require("mongoose");
 
-// --- Week 1 (Day 2): User schema ---
-// Stores account info. Password is expected to already be a bcrypt hash
-// by the time it reaches here (hashing happens in Mohan's authController).
+// Merged: Week 1 (role + email index) + Day 3 auth branch (password reset fields)
 const userSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: true,
+      required: [true, "Name is required"],
       trim: true,
     },
     email: {
       type: String,
-      required: true,
+      required: [true, "Email is required"],
       lowercase: true,
       trim: true,
     },
     password: {
       type: String,
-      required: true, // bcrypt hash, never plain text
+      required: [true, "Password is required"], // bcrypt hash, never plain text
+      minlength: 6,
     },
     role: {
       type: String,
       enum: ["admin", "analyst"],
       default: "analyst",
+    },
+    resetPasswordToken: {
+      type: String,
+      default: null,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }

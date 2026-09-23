@@ -8,7 +8,7 @@ const connectDB = async () => {
     console.log("✅ MongoDB connected");
   } catch (err) {
     console.error("❌ MongoDB connection failed:", err.message);
-    console.error("   Server will still run, but User/Dataset/TransformJob routes need MongoDB to work.");
+    console.error("   Server will still run, but DB-dependent routes (auth, uploads, jobs) need MongoDB to work.");
   }
 };
 

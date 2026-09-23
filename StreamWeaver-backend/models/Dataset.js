@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-// --- Week 1 (Day 2): Dataset schema ---
+// --- Week 1: Dataset schema ---
 // Stores metadata about every file a user uploads (not the raw rows —
 // those get streamed straight into TransformJob / bulk inserts).
 const datasetSchema = new mongoose.Schema(

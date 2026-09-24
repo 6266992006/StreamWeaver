@@ -14,4 +14,4 @@ curl -X POST http://localhost:5000/api/auth/forgot-password \
   -H "Content-Type: application/json" \
   -d '{"email":"mohan@test.com"}'
 
-Expected: `{"success":true,"message":"If that email is registered..."}` aur terminal console me reset link print hoga (agar SMTP set nahi hai).
+Expected: `{"success":true,"message":"If that email is registered..."}` 

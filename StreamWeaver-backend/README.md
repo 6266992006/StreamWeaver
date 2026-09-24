@@ -1,6 +1,6 @@
 # Day 4 — Forgot Password Flow
 
-**Reset token generate + hash + save, email service (SMTP configured nahi hai to console me link print hota hai taaki testing block na ho).
+ Login API (bcrypt.compare + JWT), JWT verification middleware, protected `/api/auth/me` route to prove it works.
 
 ## Run
 
@@ -10,8 +10,18 @@ npm start
 
 ## Test
 
-curl -X POST http://localhost:5000/api/auth/forgot-password \
-  -H "Content-Type: application/json" \
-  -d '{"email":"mohan@test.com"}'
+```bash
+# 1. Signup (or use an existing user)
+curl -X POST http://localhost:5000/api/auth/signup -H "Content-Type: application/json" \
+  -d '{"name":"Mohan","email":"mohan@test.com","password":"secret123"}'
 
-Expected: `{"success":true,"message":"If that email is registered..."}` aur terminal console me reset link print hoga (agar SMTP set nahi hai).
+# 2. Login -> copy the token from response
+curl -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" \
+  -d '{"email":"mohan@test.com","password":"secret123"}'
+
+# 3. Call protected route with the token
+
+curl http://localhost:5000/api/auth/me -H "Authorization: Bearer <token>"
+```
+
+Expected: without token → 401. With valid token → your user details.

@@ -1,6 +1,6 @@
 # Forgot Password Flow
 
-**Kaam:** Reset token generate + hash + save, email service (SMTP configured nahi hai to console me link print hota hai taaki testing block na ho).
+** Reset token generate + hash + save, email service (SMTP configured nahi hai to console me link print hota hai taaki testing block na ho).
 
 ## Run
 

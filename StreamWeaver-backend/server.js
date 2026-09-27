@@ -7,6 +7,7 @@ const rateLimit = require("express-rate-limit");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
+const jobRoutes = require("./routes/jobRoutes");
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.get("/api/health", (req, res) => {
 // --- Routes ---
 app.use("/api/auth", authRoutes);       // signup, login, forgot-password
 app.use("/api/upload", uploadRoutes);   // chunked file upload (protected)
+app.use("/api/jobs", jobRoutes);        // upload history for the Dashboard (protected)
 
 // --- 404 handler ---
 app.use((req, res) => {

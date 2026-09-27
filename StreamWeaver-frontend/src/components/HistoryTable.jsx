@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 // Matches the status enums from the backend's Dataset and TransformJob
 // schemas (models/Dataset.js, models/TransformJob.js).
 const STATUS_STYLES = {
@@ -16,7 +18,11 @@ const StatusBadge = ({ status }) => {
 
 const HistoryTable = ({ jobs = [] }) => {
   if (jobs.length === 0) {
-    return <p className="history-empty">No uploads yet.</p>;
+    return (
+      <p className="history-empty">
+        No uploads yet. <Link to="/upload">Upload your first file</Link> to see it here.
+      </p>
+    );
   }
 
   return (

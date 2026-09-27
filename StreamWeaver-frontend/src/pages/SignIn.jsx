@@ -33,7 +33,7 @@ const SignIn = () => {
   };
 
   return (
-    <div className="auth-page">
+    <div className="page page-narrow">
       <h1>Sign In</h1>
       <form onSubmit={handleSubmit} className="auth-form">
         <input
@@ -52,7 +52,7 @@ const SignIn = () => {
           onChange={handleChange}
           required
         />
-        <button type="submit" disabled={status === 'loading'}>
+        <button type="submit" className="btn btn-primary" disabled={status === 'loading'}>
           {status === 'loading' ? 'Signing in…' : 'Sign In'}
         </button>
       </form>

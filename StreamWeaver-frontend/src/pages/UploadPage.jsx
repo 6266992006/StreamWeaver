@@ -38,24 +38,21 @@ const UploadPage = () => {
   // idle | previewing | uploading | done | error
   const [status, setStatus] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const [dragActive, setDragActive] = useState(false);
 
   if (!token) {
     return (
-      <div className="upload-page">
-        <h1>Upload a CSV file</h1>
-        <p>
-          You need to be signed in to upload files.{' '}
-          <Link to="/signin">Sign in</Link> or <Link to="/signup">create an account</Link>.
+      <div className="page">
+        <h1>Upload a file</h1>
+        <p className="auth-required">
+          Sign in to upload files. <Link to="/signin">Sign in</Link> or{' '}
+          <Link to="/signup">create an account</Link>.
         </p>
       </div>
     );
   }
 
-
-  const handleFileSelect = async (e) => {
-    const selected = e.target.files?.[0];
-    if (!selected) return;
-
+  const readFile = async (selected) => {
     setFile(selected);
     setStatus('previewing');
     setErrorMsg('');
@@ -75,6 +72,18 @@ const UploadPage = () => {
     }
   };
 
+  const handleFileSelect = (e) => {
+    const selected = e.target.files?.[0];
+    if (selected) readFile(selected);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragActive(false);
+    const dropped = e.dataTransfer.files?.[0];
+    if (dropped) readFile(dropped);
+  };
+
   const handleUpload = async () => {
     if (!file) return;
     setStatus('uploading');
@@ -91,29 +100,54 @@ const UploadPage = () => {
   };
 
   return (
-    <div className="upload-page">
-      <h1>Upload a CSV file</h1>
+    <div className="page">
+      <h1>Upload a file</h1>
+      <p className="page-sub">CSV files up to 5GB. Rows are validated before anything is saved.</p>
 
-      <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileSelect} />
+      <button
+        type="button"
+        className={`dropzone ${dragActive ? 'dropzone-active' : ''}`}
+        onClick={() => fileInputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+        onDragLeave={() => setDragActive(false)}
+        onDrop={handleDrop}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          onChange={handleFileSelect}
+          hidden
+        />
+        {file ? (
+          <span className="dropzone-file">
+            <strong>{file.name}</strong>
+            <code>{(file.size / (1024 * 1024)).toFixed(2)} MB</code>
+          </span>
+        ) : (
+          <span>Drop a CSV here, or click to browse</span>
+        )}
+      </button>
 
-      {file && (
-        <p className="file-meta">
-          {file.name} — {(file.size / (1024 * 1024)).toFixed(2)} MB
-        </p>
-      )}
-
-      {status === 'previewing' && <p>Reading preview…</p>}
+      {status === 'previewing' && <p className="status-line">Reading preview…</p>}
 
       {rows.length > 0 && (
         <>
-          <h2>Preview (first {rows.length.toLocaleString()} rows)</h2>
+          <h2>Preview — first {rows.length.toLocaleString()} rows</h2>
           <VirtualGrid columns={columns} rows={rows} />
         </>
       )}
 
-      <button type="button" onClick={handleUpload} disabled={!file || status === 'uploading'}>
-        {status === 'uploading' ? `Uploading… ${progress}%` : 'Upload'}
-      </button>
+      <div className="upload-actions">
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={handleUpload}
+          disabled={!file || status === 'uploading'}
+        >
+          {status === 'uploading' ? `Uploading… ${progress}%` : 'Upload'}
+        </button>
+      </div>
 
       {status === 'uploading' && (
         <div className="progress-bar">
@@ -121,7 +155,7 @@ const UploadPage = () => {
         </div>
       )}
 
-      {status === 'done' && <p className="success-msg">Upload complete ✅</p>}
+      {status === 'done' && <p className="success-msg">Upload complete — check History for status.</p>}
       {status === 'error' && <p className="error-msg">{errorMsg}</p>}
     </div>
   );

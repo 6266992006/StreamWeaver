@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { uploadFile } from '../api/uploadApi';
 import VirtualGrid from '../components/VirtualGrid';
@@ -37,6 +38,19 @@ const UploadPage = () => {
   // idle | previewing | uploading | done | error
   const [status, setStatus] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
+
+  if (!token) {
+    return (
+      <div className="upload-page">
+        <h1>Upload a CSV file</h1>
+        <p>
+          You need to be signed in to upload files.{' '}
+          <Link to="/signin">Sign in</Link> or <Link to="/signup">create an account</Link>.
+        </p>
+      </div>
+    );
+  }
+
 
   const handleFileSelect = async (e) => {
     const selected = e.target.files?.[0];

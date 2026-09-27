@@ -149,3 +149,53 @@
   background: rgba(220, 38, 38, 0.15);
   color: #dc2626;
 }
+
+/* --- Auth pages --- */
+
+.auth-page {
+  max-width: 400px;
+  margin: 60px auto;
+  padding: 0 24px;
+}
+
+.auth-page h1 {
+  color: var(--text-h);
+  margin-bottom: 20px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-form input {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 14px;
+}
+
+.auth-form button {
+  margin-top: 4px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.auth-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-switch {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--text);
+}

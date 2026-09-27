@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getJobHistory } from '../api/jobApi';
 import HistoryTable from '../components/HistoryTable';
@@ -13,6 +14,8 @@ const Dashboard = () => {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
+    if (!token) return;
+
     let cancelled = false;
 
     const loadHistory = async () => {
@@ -35,6 +38,18 @@ const Dashboard = () => {
       cancelled = true;
     };
   }, [token]);
+
+  if (!token) {
+    return (
+      <div className="dashboard-page">
+        <h1>Upload History</h1>
+        <p>
+          You need to be signed in to view this page.{' '}
+          <Link to="/signin">Sign in</Link> or <Link to="/signup">create an account</Link>.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard-page">

@@ -89,3 +89,45 @@ exports.me = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
+// @route POST /api/auth/forgot-password
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const resetToken = require("crypto").randomBytes(32).toString("hex");
+
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 15 * 60 * 1000;
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset token generated successfully",
+      resetToken,
+    });
+  } catch (err) {
+    console.error("Forgot password error:", err.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};

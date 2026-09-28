@@ -47,6 +47,10 @@ const SignIn = () => {
         </div>
         <button type="submit" style={{ width: '100%', padding: '0.5rem', cursor: 'pointer' }}>Login</button>
       </form>
+      <p>
+  <Link to="/forgot-password">Forgot Password?</Link>
+</p>
+
       <p style={{ marginTop: '1rem' }}>Don't have an account? <Link to="/signup">Sign Up</Link></p>
     </div>
   );

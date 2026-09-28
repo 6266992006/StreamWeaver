@@ -10,11 +10,14 @@ class BulkInserter {
    */
   constructor(model, { batchSize = DEFAULT_BATCH_SIZE, ordered = false } = {}) {
     if (!model) throw new Error("BulkInserter requires a Mongoose model");
+    if (!Number.isInteger(batchSize) || batchSize <= 0) {
+      throw new Error("batchSize must be a positive integer");
+    }
     this.model = model;
     this.batchSize = batchSize;
     this.ordered = ordered;
     this.buffer = [];
-    this.stats = { inserted: 0, failed: 0, batches: 0 };
+    this.stats = { inserted: 0, failed: 0, batches: 0, batchErrors: [] };
   }
 
   // Add one document; auto-flushes once the buffer hits batchSize.
@@ -49,14 +52,26 @@ class BulkInserter {
       this.stats.inserted += insertedCount;
       return result;
     } catch (err) {
-      // With ordered:false, MongoDB still inserts the valid docs in the
-      // batch and reports the rest as per-op failures in err.writeErrors.
-      const writeErrors = err.writeErrors || [];
-      const failedCount = writeErrors.length;
-      const insertedCount = ops.length - failedCount;
-      this.stats.inserted += insertedCount;
-      this.stats.failed += failedCount;
-      return { insertedCount, writeErrors };
+      if (err.writeErrors && err.writeErrors.length) {
+        // Partial failure: some ops in this batch were rejected, but
+        // MongoDB still processed (and inserted) the rest.
+        const failedCount = err.writeErrors.length;
+        const insertedCount = ops.length - failedCount;
+        this.stats.inserted += insertedCount;
+        this.stats.failed += failedCount;
+        return { insertedCount, writeErrors: err.writeErrors };
+      }
+
+      // Total failure: the whole batch never reached MongoDB (e.g. a
+      // dropped connection). Nothing in it was inserted — do NOT count
+      // these as successes.
+      this.stats.failed += ops.length;
+      this.stats.batchErrors.push({
+        batch: this.stats.batches,
+        size: ops.length,
+        message: err.message,
+      });
+      return { insertedCount: 0, error: err.message };
     }
   }
 

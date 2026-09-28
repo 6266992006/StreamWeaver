@@ -65,6 +65,30 @@ test("BulkInserter counts partial write failures without losing successful rows"
   assert.equal(stats.failed, 2);
 });
 
+test("BulkInserter treats a total batch failure (no writeErrors) as zero inserted, not fully inserted", async () => {
+  const model = {
+    bulkWrite: async () => {
+      throw new Error("connection lost"); // no .writeErrors -> whole batch failed
+    },
+  };
+  const inserter = new BulkInserter(model, { batchSize: 5 });
+
+  await inserter.addMany(Array.from({ length: 5 }, (_, i) => ({ n: i })));
+  const stats = await inserter.finish();
+
+  assert.equal(stats.inserted, 0); // must NOT be silently counted as 5
+  assert.equal(stats.failed, 5);
+  assert.equal(stats.batchErrors.length, 1);
+  assert.match(stats.batchErrors[0].message, /connection lost/);
+});
+
+test("BulkInserter rejects an invalid batchSize", () => {
+  const model = makeFakeModel();
+  assert.throws(() => new BulkInserter(model, { batchSize: 0 }));
+  assert.throws(() => new BulkInserter(model, { batchSize: -5 }));
+  assert.throws(() => new BulkInserter(model, { batchSize: 1.5 }));
+});
+
 // ---------- dbValidators ----------
 
 test("validateRow flags missing required fields and bad types", () => {

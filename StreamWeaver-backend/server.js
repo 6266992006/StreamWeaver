@@ -7,7 +7,7 @@ const rateLimit = require("express-rate-limit");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
-const jobRoutes = require("./routes/jobRoutes");
+const parseRoutes = require("./routes/parseRoutes");
 
 const app = express();
 
@@ -27,16 +27,16 @@ app.use("/api/", limiter);
 
 // --- Health check ---
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Day 5 - Week 1 complete)" });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 2 - Day 1)" });
 });
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "ok", day: 5, timestamp: new Date().toISOString() });
+  res.json({ success: true, status: "ok", week: 2, day: 1, timestamp: new Date().toISOString() });
 });
 
 // --- Routes ---
-app.use("/api/auth", authRoutes);       // signup, login, forgot-password
-app.use("/api/upload", uploadRoutes);   // chunked file upload (protected)
-app.use("/api/jobs", jobRoutes);        // upload history for the Dashboard (protected)
+app.use("/api/auth", authRoutes);       // signup, login, forgot-password (Week 1)
+app.use("/api/upload", uploadRoutes);   // chunked file upload (Week 1)
+app.use("/api/parse", parseRoutes);     // Week 2 Day 1 — CSV line-splitting preview
 
 // --- 404 handler ---
 app.use((req, res) => {

@@ -93,15 +93,13 @@ exports.me = async (req, res) => {
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
+     const user = await User.findOne({ email: email.toLowerCase() });
 
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required",
-      });
-    }
+    
+    // @route POST /api/auth/reset-password
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+
+    
 
     if (!user) {
       return res.status(404).json({
@@ -111,19 +109,71 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const resetToken = require("crypto").randomBytes(32).toString("hex");
-
     user.resetPasswordToken = resetToken;
     user.resetPasswordExpires = Date.now() + 15 * 60 * 1000;
+    await user.save();
+    return res.status(200).json({
+  success: true,
+  message: "Password reset token generated successfully",
+  resetToken,
+});
+
+    
+  } catch (err) {
+    console.error("Forgot password error:", err.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+// @route POST /api/auth/reset-password
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Token and password are required",
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters",
+      });
+    }
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired reset token",
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    user.password = hashedPassword;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
 
     await user.save();
 
     return res.status(200).json({
       success: true,
-      message: "Password reset token generated successfully",
-      resetToken,
+      message: "Password reset successfully",
     });
   } catch (err) {
-    console.error("Forgot password error:", err.message);
+    console.error("Reset password error:", err.message);
 
     return res.status(500).json({
       success: false,

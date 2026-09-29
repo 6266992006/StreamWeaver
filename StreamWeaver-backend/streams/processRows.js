@@ -1,33 +1,33 @@
-const { BulkInserter } = require("./bulkInsert");
-const { validateRows } = require("../utils/dbValidators");
+const { runImportPipeline } = require("./importPipeline");
 
 /**
- * Processes an array of rows, validating them and inserting the valid ones in batches.
+ * Convenience wrapper for when the rows are already in an array (small
+ * files, tests). Same behaviour as runImportPipeline — validate, map,
+ * insert in batches of 1,000 — so there is exactly one code path.
+ *
  * @param {object[]} rows - parsed row objects (source column -> value)
  * @param {object} opts
  * @param {object} opts.mappingConfig - see utils/dbValidators.js
- * @param {import("mongoose").Model} opts.model - target collection (e.g. a Dataset's row collection)
+ * @param {import("mongoose").Model} opts.model - target collection
  * @param {number} [opts.batchSize=1000]
+ * @param {(data: object, rowNumber: number) => object} [opts.buildDocument]
+ * @returns {Promise<{ totalRows, rowsProcessed, rowsFailed, errorLog }>}
+ *   errorLog rows are 1-based data-row numbers.
  */
-async function processRows(rows, { mappingConfig, model, batchSize } = {}) {
-  const { validRows, invalidRows } = validateRows(rows, mappingConfig);
-
-  const inserter = new BulkInserter(model, { batchSize });
-  await inserter.addMany(validRows);
-  const insertStats = await inserter.finish();
-
-  // insertStats.failed covers rows that passed validation but MongoDB
-  // itself rejected (duplicate key, schema cast error, etc).
-  const insertFailures = (insertStats.writeErrors || []).map((e, i) => ({
-    row: e.index ?? i,
-    reason: e.errmsg || "Insert failed",
-  }));
+async function processRows(rows, { mappingConfig, model, batchSize, buildDocument } = {}) {
+  const result = await runImportPipeline({
+    source: rows,
+    mappingConfig,
+    model,
+    batchSize,
+    buildDocument,
+  });
 
   return {
-    totalRows: rows.length,
-    rowsProcessed: insertStats.inserted,
-    rowsFailed: invalidRows.length + insertFailures.length,
-    errorLog: [...invalidRows, ...insertFailures],
+    totalRows: result.totalRows,
+    rowsProcessed: result.rowsProcessed,
+    rowsFailed: result.rowsFailed,
+    errorLog: result.errorLog,
   };
 }
 

@@ -1,15 +1,13 @@
 import axios from 'axios';
+import { API_BASE } from './config';
 
-// Backend base API URL
-// NOTE: this route is a Week 3 backend deliverable (Mohan) — the
-// frontend is built against the agreed contract ahead of time so both
-// sides wire together as soon as it's live.
-const API_URL = 'http://localhost:5000/api/jobs';
-
-// Fetches the logged-in user's upload/job history for the Dashboard.
+// Fetches the logged-in user's upload history for the Dashboard.
+// Backend: GET /api/jobs (protected) -> { success, jobs: [...] }
+// Each job: { id, fileName, uploadedAt, sizeBytes, status, totalRows,
+//             rowsProcessed, rowsFailed, rowsPerSec, errorMessage }
 export const getJobHistory = async (token) => {
-  const response = await axios.get(API_URL, {
+  const response = await axios.get(`${API_BASE}/api/jobs`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  return response.data; // expected shape: { success, jobs: [...] }
+  return response.data;
 };

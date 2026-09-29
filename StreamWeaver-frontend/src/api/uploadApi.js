@@ -1,7 +1,7 @@
 import axios from 'axios';
+import { API_BASE } from './config';
 
-// Backend base API URL
-const API_URL = 'http://localhost:5000/api/upload';
+const API_URL = `${API_BASE}/api/upload`;
 
 // Streams a file to the backend as multipart/form-data. The backend
 // (busboy) pipes it straight to disk, so even multi-GB CSVs never sit

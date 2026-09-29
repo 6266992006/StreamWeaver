@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { uploadFile } from '../api/uploadApi';
@@ -28,8 +28,13 @@ const parsePreview = (text) => {
 };
 
 const UploadPage = () => {
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
   const fileInputRef = useRef(null);
+  // logout() changes identity every render; read it through a ref.
+  const logoutRef = useRef(logout);
+  useEffect(() => {
+    logoutRef.current = logout;
+  });
 
   const [file, setFile] = useState(null);
   const [columns, setColumns] = useState([]);
@@ -53,6 +58,15 @@ const UploadPage = () => {
   }
 
   const readFile = async (selected) => {
+    // The file picker filters to .csv, but drag-and-drop doesn't.
+    if (!/\.csv$/i.test(selected.name)) {
+      setFile(null);
+      setRows([]);
+      setColumns([]);
+      setStatus('error');
+      setErrorMsg('Only .csv files are supported.');
+      return;
+    }
     setFile(selected);
     setStatus('previewing');
     setErrorMsg('');
@@ -95,8 +109,25 @@ const UploadPage = () => {
       setStatus('done');
     } catch (err) {
       setStatus('error');
-      setErrorMsg(err.response?.data?.message || 'Upload failed. Please try again.');
+      if (err.response?.status === 401) {
+        setErrorMsg('Your session has expired. Please sign in again.');
+        logoutRef.current();
+      } else if (!err.response) {
+        setErrorMsg("Can't reach the backend. Is it running?");
+      } else {
+        setErrorMsg(err.response.data?.message || 'Upload failed. Please try again.');
+      }
     }
+  };
+
+  const handleReset = () => {
+    setFile(null);
+    setRows([]);
+    setColumns([]);
+    setProgress(0);
+    setStatus('idle');
+    setErrorMsg('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   return (
@@ -138,16 +169,18 @@ const UploadPage = () => {
         </>
       )}
 
-      <div className="upload-actions">
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={handleUpload}
-          disabled={!file || status === 'uploading'}
-        >
-          {status === 'uploading' ? `Uploading… ${progress}%` : 'Upload'}
-        </button>
-      </div>
+      {status !== 'done' && (
+        <div className="upload-actions">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleUpload}
+            disabled={!file || status === 'uploading'}
+          >
+            {status === 'uploading' ? `Uploading… ${progress}%` : 'Upload'}
+          </button>
+        </div>
+      )}
 
       {status === 'uploading' && (
         <div className="progress-bar">
@@ -155,7 +188,17 @@ const UploadPage = () => {
         </div>
       )}
 
-      {status === 'done' && <p className="success-msg">Upload complete — check History for status.</p>}
+      {status === 'done' && (
+        <div className="upload-success" role="status">
+          <p>
+            <strong>{file?.name}</strong> uploaded.
+          </p>
+          <div className="upload-success-actions">
+            <Link to="/dashboard" className="btn btn-primary">View history</Link>
+            <button type="button" className="btn btn-ghost" onClick={handleReset}>Upload another</button>
+          </div>
+        </div>
+      )}
       {status === 'error' && <p className="error-msg">{errorMsg}</p>}
     </div>
   );

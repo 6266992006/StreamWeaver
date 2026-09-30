@@ -40,7 +40,11 @@ const datasetSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Fast "my uploads" queries — powers the Upload History Dashboard.
-datasetSchema.index({ ownerId: 1 });
+// Upload History does .find({ ownerId }).sort({ createdAt: -1 }).limit(100).
+// A single-field { ownerId: 1 } index finds the right documents but still
+// forces MongoDB to sort every match in memory before applying the limit —
+// fine for a handful of uploads, expensive once a user has thousands. This
+// compound index lets Mongo walk it in already-sorted order and stop at 100.
+datasetSchema.index({ ownerId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Dataset", datasetSchema);

@@ -89,6 +89,23 @@ npm run backfill -- you@example.com --dry-run   # preview
 npm run backfill -- you@example.com             # actually add them
 ```
 
+## Indexes (Week 3)
+
+`config/dbIndexes.js` builds every model's declared indexes explicitly,
+instead of relying on Mongoose's automatic (and, in production, risky)
+background index creation the first time a model is used:
+
+```bash
+npm run db:indexes            # create missing indexes, drop stale ones
+npm run db:indexes -- --check # report drift only, changes nothing (exit
+                               # code 1 if out of sync — usable in CI)
+```
+
+`Dataset` now indexes `{ ownerId: 1, createdAt: -1 }` instead of just
+`{ ownerId: 1 }` — the Upload History query filters by owner *and* sorts
+by upload time, so the compound index lets MongoDB satisfy both without
+an in-memory sort once a user has thousands of uploads.
+
 ## Running the tests
 
 ```bash

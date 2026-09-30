@@ -1,14 +1,13 @@
-# Week 2 — Day 2 — CSV Row -> JSON Transform Stream
+# Week 2 — Day 3 — Column-Mapping Config API
 
-**Kaam:** Ek aur `stream.Transform` class jo Day 1 ke `CsvLineStream` ke baad
-chalti hai — har CSV line ko JSON object me convert karti hai (pehli line ko
-header maan kar). Quoted-comma fields (jaise `"Doe, John"`) bhi sahi handle
-hote hain.
+**Kaam:** API jo frontend se column-mapping config (source CSV column ->
+destination field name) accept karke save karta hai. Har user ka apna mapping
+alag store hota hai (JWT token se pehchana jata hai).
 
 ## Naya kya add hua
-- `streams/csvRowToJsonStream.js` — `CsvRowToJsonStream` class
-- `controllers/parseController.js` — `previewJson()` handler add kiya
-- `routes/parseRoutes.js` — `POST /api/parse/json-preview` add kiya
+- `models/mappingStore.js` — in-memory store (userId -> mapping)
+- `controllers/mappingController.js` — `saveMapping()`, `getMapping()`
+- `routes/mappingRoutes.js` — `POST /api/mapping`, `GET /api/mapping`
 
 ## Run
 ```bash
@@ -19,20 +18,22 @@ npm start
 
 ## Test
 ```bash
-curl -X POST http://localhost:5000/api/parse/json-preview \
-  -H "Authorization: Bearer <token>" \
-  -F "file=@/path/to/data.csv"
-```
-Expected response:
-```json
-{
-  "success": true,
-  "headers": ["id", "name", "value"],
-  "totalRows": 50000,
-  "preview": [{"id":"0","name":"row0","value":"0"}, ...]
-}
+# Save mapping
+curl -X POST http://localhost:5000/api/mapping \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"mapping":{"Full Name":"name","Email Address":"email"}}'
+
+# Get saved mapping
+curl http://localhost:5000/api/mapping -H "Authorization: Bearer <token>"
 ```
 
 **Verified:**
-- Quoted comma field (`"Doe, John",25`) -> 1 field, sahi parse hua
-- 50,000-row CSV -> totalRows: 50000, first 5 rows preview me sahi aaye
+- Bina mapping save kiye GET karo -> `404`
+- Valid mapping POST -> `200`, wapas GET karne pe same mapping milta hai
+- Empty mapping `{}` POST -> `400` (validation)
+- Bina token -> `401`
+
+## Note
+Yeh mapping server memory me store hoti hai (restart hone pe reset ho jayegi) —
+Week 2 ke liye jaanbujh kar simple rakha hai. Baad me MongoDB collection me
+badalna ho to sirf `mappingStore.js` change karna padega, baaki code same rahega.

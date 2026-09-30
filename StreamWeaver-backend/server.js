@@ -8,6 +8,7 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const parseRoutes = require("./routes/parseRoutes");
+const mappingRoutes = require("./routes/mappingRoutes");
 
 const app = express();
 
@@ -27,16 +28,17 @@ app.use("/api/", limiter);
 
 // --- Health check ---
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 2 - Day 2)" });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 2 - Day 3)" });
 });
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "ok", week: 2, day: 2, timestamp: new Date().toISOString() });
+  res.json({ success: true, status: "ok", week: 2, day: 3, timestamp: new Date().toISOString() });
 });
 
 // --- Routes ---
 app.use("/api/auth", authRoutes);       // signup, login, forgot-password (Week 1)
 app.use("/api/upload", uploadRoutes);   // chunked file upload (Week 1)
 app.use("/api/parse", parseRoutes);     // Week 2 — CSV line-split (Day 1) + CSV->JSON (Day 2)
+app.use("/api/mapping", mappingRoutes); // Week 2 Day 3 — column-mapping config
 
 // --- 404 handler ---
 app.use((req, res) => {

@@ -3,11 +3,13 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const mongoose = require("mongoose");
 
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const parseRoutes = require("./routes/parseRoutes");
+const jobRoutes = require("./routes/jobRoutes");
 
 const app = express();
 
@@ -26,17 +28,28 @@ const limiter = rateLimit({
 app.use("/api/", limiter);
 
 // --- Health check ---
+// `routes` lists what THIS running process actually serves. If the frontend
+// says "Route not found", open http://localhost:5000/ — a missing route
+// here means an older copy of the backend is still running and needs a restart.
+const ROUTES = ["/api/auth", "/api/upload", "/api/parse", "/api/jobs"];
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 2 - Day 2)" });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀", routes: ROUTES });
 });
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "ok", week: 2, day: 2, timestamp: new Date().toISOString() });
+  res.json({
+    success: true,
+    status: "ok",
+    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    routes: ROUTES,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // --- Routes ---
 app.use("/api/auth", authRoutes);       // signup, login, forgot-password (Week 1)
 app.use("/api/upload", uploadRoutes);   // chunked file upload (Week 1)
-app.use("/api/parse", parseRoutes);     // Week 2 — CSV line-split (Day 1) + CSV->JSON (Day 2)
+app.use("/api/parse", parseRoutes);     // Week 2 — CSV line-split + CSV->JSON (Mohan)
+app.use("/api/jobs", jobRoutes);        // Week 2 — upload history for the Dashboard (Krishna)
 
 // --- 404 handler ---
 app.use((req, res) => {
@@ -53,7 +66,21 @@ const PORT = process.env.PORT || 5000;
 
 // Start the HTTP server immediately so health checks work even before/without
 // MongoDB being reachable. DB connects in parallel, not blocking startup.
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
+});
+
+// The classic "my changes don't show up" trap: an older copy of the server
+// is still holding the port, so the new one can't start and the browser keeps
+// talking to the old code (which is how a new route ends up "not found").
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`❌ Port ${PORT} is already in use — an older StreamWeaver backend is probably still running.`);
+    console.error("   Close that terminal (or end the process), then start again.");
+    console.error(`   Windows:  netstat -ano | findstr :${PORT}   then   taskkill /PID <pid> /F`);
+    console.error(`   Mac/Linux: lsof -ti :${PORT} | xargs kill`);
+    process.exit(1);
+  }
+  throw err;
 });
 connectDB();

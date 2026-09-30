@@ -9,7 +9,7 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const parseRoutes = require("./routes/parseRoutes");
-const jobRoutes = require("./routes/jobRoutes");
+const mappingRoutes = require("./routes/mappingRoutes");
 
 const app = express();
 
@@ -33,23 +33,17 @@ app.use("/api/", limiter);
 // here means an older copy of the backend is still running and needs a restart.
 const ROUTES = ["/api/auth", "/api/upload", "/api/parse", "/api/jobs"];
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀", routes: ROUTES });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 2 - Day 3)" });
 });
 app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    status: "ok",
-    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
-    routes: ROUTES,
-    timestamp: new Date().toISOString(),
-  });
+  res.json({ success: true, status: "ok", week: 2, day: 3, timestamp: new Date().toISOString() });
 });
 
 // --- Routes ---
 app.use("/api/auth", authRoutes);       // signup, login, forgot-password (Week 1)
 app.use("/api/upload", uploadRoutes);   // chunked file upload (Week 1)
-app.use("/api/parse", parseRoutes);     // Week 2 — CSV line-split + CSV->JSON (Mohan)
-app.use("/api/jobs", jobRoutes);        // Week 2 — upload history for the Dashboard (Krishna)
+app.use("/api/parse", parseRoutes);     // Week 2 — CSV line-split (Day 1) + CSV->JSON (Day 2)
+app.use("/api/mapping", mappingRoutes); // Week 2 Day 3 — column-mapping config
 
 // --- 404 handler ---
 app.use((req, res) => {

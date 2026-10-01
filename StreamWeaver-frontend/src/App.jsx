@@ -7,6 +7,7 @@ import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Streams from './pages/Streams';
 import ProtectedRoute from './components/ProtectedRoute';
+import MappingPage from './pages/MappingPage';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           <Route path="/signup" element={<SignUp />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          
           
           <Route
   path="/streams"
@@ -32,6 +34,14 @@ function App() {
   element={
     <ProtectedRoute>
       <Dashboard />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/mapping"
+  element={
+    <ProtectedRoute>
+      <MappingPage />
     </ProtectedRoute>
   }
 />

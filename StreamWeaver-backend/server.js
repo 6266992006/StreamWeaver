@@ -10,6 +10,7 @@ const authRoutes = require("./routes/authRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const parseRoutes = require("./routes/parseRoutes");
 const jobRoutes = require("./routes/jobRoutes");
+const { attachProgressSocket, WS_PATH } = require("./sockets/progressSocket");
 
 const app = express();
 
@@ -31,7 +32,7 @@ app.use("/api/", limiter);
 // `routes` lists what THIS running process actually serves. If the frontend
 // says "Route not found", open http://localhost:5000/ — a missing route
 // here means an older copy of the backend is still running and needs a restart.
-const ROUTES = ["/api/auth", "/api/upload", "/api/parse", "/api/jobs"];
+const ROUTES = ["/api/auth", "/api/upload", "/api/parse", "/api/jobs", WS_PATH];
 app.get("/", (req, res) => {
   res.json({ success: true, message: "StreamWeaver backend is running 🚀", routes: ROUTES });
 });
@@ -83,4 +84,8 @@ server.on("error", (err) => {
   }
   throw err;
 });
+// Week 3 — live job progress over WebSocket (Krishna). Shares the HTTP server;
+// clients connect to ws://host:PORT/ws/progress?token=<JWT>.
+const progressHub = attachProgressSocket(server);
+
 connectDB();

@@ -3,7 +3,6 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-const mongoose = require("mongoose");
 
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
@@ -28,15 +27,11 @@ const limiter = rateLimit({
 app.use("/api/", limiter);
 
 // --- Health check ---
-// `routes` lists what THIS running process actually serves. If the frontend
-// says "Route not found", open http://localhost:5000/ — a missing route
-// here means an older copy of the backend is still running and needs a restart.
-const ROUTES = ["/api/auth", "/api/upload", "/api/parse", "/api/jobs"];
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 2 - Day 3)" });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 2 - Day 4)" });
 });
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "ok", week: 2, day: 3, timestamp: new Date().toISOString() });
+  res.json({ success: true, status: "ok", week: 2, day: 4, timestamp: new Date().toISOString() });
 });
 
 // --- Routes ---
@@ -60,21 +55,7 @@ const PORT = process.env.PORT || 5000;
 
 // Start the HTTP server immediately so health checks work even before/without
 // MongoDB being reachable. DB connects in parallel, not blocking startup.
-const server = app.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
-});
-
-// The classic "my changes don't show up" trap: an older copy of the server
-// is still holding the port, so the new one can't start and the browser keeps
-// talking to the old code (which is how a new route ends up "not found").
-server.on("error", (err) => {
-  if (err.code === "EADDRINUSE") {
-    console.error(`❌ Port ${PORT} is already in use — an older StreamWeaver backend is probably still running.`);
-    console.error("   Close that terminal (or end the process), then start again.");
-    console.error(`   Windows:  netstat -ano | findstr :${PORT}   then   taskkill /PID <pid> /F`);
-    console.error(`   Mac/Linux: lsof -ti :${PORT} | xargs kill`);
-    process.exit(1);
-  }
-  throw err;
 });
 connectDB();

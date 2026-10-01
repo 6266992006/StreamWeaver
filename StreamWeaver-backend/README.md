@@ -1,13 +1,16 @@
-# Week 2 — Day 3 — Column-Mapping Config API
+# Week 2 — Day 4 — Full ETL Pipeline (CSV -> NDJSON on disk)
 
-**Kaam:** API jo frontend se column-mapping config (source CSV column ->
-destination field name) accept karke save karta hai. Har user ka apna mapping
-alag store hota hai (JWT token se pehchana jata hai).
+**Kaam:** Day 1 + Day 2 ke streams ko ek real upload endpoint me jodna —
+uploaded CSV file seedha disk par NDJSON (newline-delimited JSON) format me
+save hoti hai, bina kabhi poori file RAM me load kiye.
 
 ## Naya kya add hua
-- `models/mappingStore.js` — in-memory store (userId -> mapping)
-- `controllers/mappingController.js` — `saveMapping()`, `getMapping()`
-- `routes/mappingRoutes.js` — `POST /api/mapping`, `GET /api/mapping`
+- `controllers/etlController.js` — `parseAndSave()` — poori pipeline
+  (`fileStream -> CsvLineStream -> CsvRowToJsonStream -> NDJSON -> disk`)
+  Node.js ke `pipeline()` helper se jodi gayi (proper error handling +
+  backpressure ke saath)
+- `routes/uploadRoutes.js` — `POST /api/upload/parse` add kiya
+- `parsed/` folder — output NDJSON files yahan save hoti hain
 
 ## Run
 ```bash
@@ -18,22 +21,11 @@ npm start
 
 ## Test
 ```bash
-# Save mapping
-curl -X POST http://localhost:5000/api/mapping \
-  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
-  -d '{"mapping":{"Full Name":"name","Email Address":"email"}}'
-
-# Get saved mapping
-curl http://localhost:5000/api/mapping -H "Authorization: Bearer <token>"
+curl -X POST http://localhost:5000/api/upload/parse \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@/path/to/data.csv"
 ```
+Response me `savedAs` filename milega — `parsed/` folder me check karo.
 
-**Verified:**
-- Bina mapping save kiye GET karo -> `404`
-- Valid mapping POST -> `200`, wapas GET karne pe same mapping milta hai
-- Empty mapping `{}` POST -> `400` (validation)
-- Bina token -> `401`
-
-## Note
-Yeh mapping server memory me store hoti hai (restart hone pe reset ho jayegi) —
-Week 2 ke liye jaanbujh kar simple rakha hai. Baad me MongoDB collection me
-badalna ho to sirf `mappingStore.js` change karna padega, baaki code same rahega.
+**Verified:** 50,000-row CSV upload -> `parsed/*.ndjson` file me exactly 50,000
+lines, har line valid JSON hai, first aur last object manually verify kiye.

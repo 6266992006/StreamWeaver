@@ -3,7 +3,6 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-const mongoose = require("mongoose");
 
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
@@ -33,15 +32,18 @@ const limiter = rateLimit({
 app.use("/api/", limiter);
 
 // --- Health check ---
+<<<<<<< HEAD
 // `routes` lists what THIS running process actually serves. If the frontend
 // says "Route not found", open http://localhost:5000/ — a missing route
 // here means an older copy of the backend is still running and needs a restart.
 const ROUTES = ["/api/auth", "/api/upload", "/api/parse", "/api/jobs", WS_PATH];
+=======
+>>>>>>> bb754342042c479ffc1b3f2ab3b7cc48b7dd9f5d
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 2 - Day 3)" });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 2 - Day 4)" });
 });
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "ok", week: 2, day: 3, timestamp: new Date().toISOString() });
+  res.json({ success: true, status: "ok", week: 2, day: 4, timestamp: new Date().toISOString() });
 });
 
 // --- Routes ---
@@ -65,9 +67,10 @@ const PORT = process.env.PORT || 5000;
 
 // Start the HTTP server immediately so health checks work even before/without
 // MongoDB being reachable. DB connects in parallel, not blocking startup.
-const server = app.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
 });
+<<<<<<< HEAD
 
 // The classic "my changes don't show up" trap: an older copy of the server
 // is still holding the port, so the new one can't start and the browser keeps
@@ -86,4 +89,6 @@ server.on("error", (err) => {
 // clients connect to ws://host:PORT/ws/progress?token=<JWT>.
 const progressHub = attachProgressSocket(server);
 
+=======
+>>>>>>> bb754342042c479ffc1b3f2ab3b7cc48b7dd9f5d
 connectDB();

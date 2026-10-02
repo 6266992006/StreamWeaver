@@ -92,3 +92,24 @@ const progressHub = attachProgressSocket(server);
 =======
 >>>>>>> bb754342042c479ffc1b3f2ab3b7cc48b7dd9f5d
 connectDB();
+
+// Without this, redeploying/restarting (or Ctrl+C) leaves open WebSocket
+// connections dangling — the process either hangs waiting for them or gets
+// force-killed, and connected browsers see a broken connection instead of a
+// clean close. Close the socket hub first, then stop accepting new HTTP
+// connections, so an in-progress request still gets to finish.
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`\n${signal} received — shutting down...`);
+
+  await progressHub.close();
+  await new Promise((resolve) => server.close(resolve));
+  await mongoose.connection.close().catch(() => {});
+
+  console.log("Shutdown complete.");
+  process.exit(0);
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

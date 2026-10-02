@@ -48,6 +48,21 @@ ws.onmessage = (e) => {
 - Per-socket max 20 subscriptions, client message max 4KB, slow client ke liye frame skip (memory safe), 30s heartbeat se dead connection hat jaate hain.
 - Poll timer tabhi chalta hai jab koi subscription ho.
 
+## Week 3 — Day 3
+
+- **Graceful shutdown** (`server.js`): `SIGTERM`/`SIGINT` now closes every open
+  WebSocket connection (`progressHub.close()`) *before* the HTTP server stops
+  accepting connections, so a deploy/restart/Ctrl+C doesn't leave browsers
+  with a connection that silently hangs, and doesn't force-kill the process
+  while a client is mid-frame. Verified by actually spawning the server,
+  opening a real socket, sending `SIGTERM`, and checking the socket receives
+  a clean close.
+- Verified the whole feature over a **real network connection** (not just the
+  in-process `ProgressHub` unit tests): a real `ws` client subscribes, the
+  server pushes a snapshot, a DB update triggers a live frame, job completion
+  sends the final frame and the socket gets nothing further, and a second
+  user is correctly shown "Job not found" for someone else's job.
+
 ## Test
 ```bash
 npm test                                   # poora suite (75 tests)

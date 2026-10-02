@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import MappingForm from '../components/MappingForm';
 
 const MappingPage = () => {
   const [mappings, setMappings] = useState([
@@ -73,53 +74,13 @@ const MappingPage = () => {
           <div>Action</div>
         </div>
 
-        {mappings.map((mapping, index) => (
-          <div style={styles.mappingRow} key={index}>
-            <input
-              type="text"
-              placeholder="CSV column"
-              value={mapping.source}
-              onChange={(e) =>
-                handleMappingChange(index, 'source', e.target.value)
-              }
-              style={styles.input}
-            />
-
-            <input
-              type="text"
-              placeholder="MongoDB field"
-              value={mapping.destination}
-              onChange={(e) =>
-                handleMappingChange(index, 'destination', e.target.value)
-              }
-              style={styles.input}
-            />
-
-            <select
-              value={mapping.transform}
-              onChange={(e) =>
-                handleMappingChange(index, 'transform', e.target.value)
-              }
-              style={styles.select}
-            >
-              <option value="None">None</option>
-              <option value="Trim">Trim</option>
-              <option value="Uppercase">Uppercase</option>
-              <option value="Lowercase">Lowercase</option>
-            </select>
-
-            <button
-              onClick={() => removeMapping(index)}
-              style={styles.removeButton}
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-
-        <button onClick={addMapping} style={styles.addButton}>
-          + Add Mapping
-        </button>
+        <MappingForm
+  mappings={mappings}
+  onMappingChange={handleMappingChange}
+  onAddMapping={addMapping}
+  onRemoveMapping={removeMapping}
+/>
+       
       </div>
     </div>
   );

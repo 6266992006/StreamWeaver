@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import ErrorBadge from './ErrorBadge';
 import {
   formatBytes,
   formatCount,
@@ -28,7 +29,7 @@ const SortHeader = ({ label, sortKey, sort, onSort, numeric = false }) => {
   );
 };
 
-const HistoryTable = ({ jobs = [], sort, onSort, filtered = false }) => {
+const HistoryTable = ({ jobs = [], sort, onSort, filtered = false, onViewErrors, selectedJobId = null }) => {
   if (jobs.length === 0) {
     return filtered ? (
       <p className="history-empty">No files match your search or filter.</p>
@@ -65,7 +66,19 @@ const HistoryTable = ({ jobs = [], sort, onSort, filtered = false }) => {
                 </td>
                 <td className="num">{formatCount(job.totalRows)}</td>
                 <td className={`num ${job.rowsFailed > 0 ? 'num-failed' : ''}`}>
-                  {job.rowsFailed > 0 ? formatCount(job.rowsFailed) : '—'}
+                  {job.rowsFailed > 0 ? (
+                    job.jobId && onViewErrors ? (
+                      <ErrorBadge
+                        count={job.rowsFailed}
+                        active={selectedJobId === job.jobId}
+                        onClick={() => onViewErrors(job)}
+                      />
+                    ) : (
+                      formatCount(job.rowsFailed)
+                    )
+                  ) : (
+                    '—'
+                  )}
                 </td>
                 <td className="col-status">
                   <StatusBadge status={job.status} />

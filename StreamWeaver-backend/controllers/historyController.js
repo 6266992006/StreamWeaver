@@ -53,4 +53,41 @@ exports.getHistory = async (req, res) => {
   }
 };
 
+// @route  GET /api/jobs/:jobId/errors  (protected)
+// The per-row failures of one import run, for the frontend's ErrorTable.
+// `errors` is capped server-side (see JobTracker.MAX_ERROR_LOG); rowsFailed
+// is the true total, so `truncated` tells the UI there are more than shown.
+const OBJECT_ID_RE = /^[a-f0-9]{24}$/i;
+
+exports.getJobErrors = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    if (!OBJECT_ID_RE.test(jobId)) {
+      return res.status(400).json({ success: false, message: "Invalid job id" });
+    }
+
+    // ownerId in the filter: someone else's job looks exactly like a missing one.
+    const job = await TransformJob.findOne({ _id: jobId, ownerId: req.userId })
+      .select("status rowsFailed errorLog")
+      .lean();
+    if (!job) {
+      return res.status(404).json({ success: false, message: "Job not found" });
+    }
+
+    const errors = (job.errorLog || []).map(({ row, reason }) => ({ row, reason }));
+    const rowsFailed = job.rowsFailed ?? 0;
+    return res.status(200).json({
+      success: true,
+      jobId: String(job._id ?? jobId),
+      status: job.status,
+      rowsFailed,
+      errors,
+      truncated: rowsFailed > errors.length,
+    });
+  } catch (err) {
+    console.error("Job errors fetch error:", err.message);
+    return res.status(500).json({ success: false, message: "Could not fetch failed rows" });
+  }
+};
+
 exports.buildHistoryItem = buildHistoryItem;

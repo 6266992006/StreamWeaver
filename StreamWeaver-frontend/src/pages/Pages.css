@@ -588,3 +588,193 @@
   gap: 10px;
   margin-top: 14px;
 }
+
+/* --- Failed rows (ErrorTable / ErrorBadge) --- */
+
+.err-panel {
+  margin-top: 20px;
+  padding: 18px 20px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--danger);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.err-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.err-panel-header h2 {
+  font-size: 18px;
+}
+
+.err-panel-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.err-panel .skeleton {
+  margin-top: 16px;
+}
+
+.err-panel .skeleton-row {
+  height: 36px;
+}
+
+.err-panel .toolbar {
+  margin-top: 16px;
+}
+
+.err-grid {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.err-header,
+.err-row {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  align-items: center;
+}
+
+.err-header {
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.err-row {
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.err-row:hover {
+  background: var(--surface);
+}
+
+.err-cell {
+  padding: 0 14px;
+  min-width: 0;
+}
+
+.err-header .err-cell {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.err-cell-row {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-h);
+}
+
+.err-cell-reasons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+/* One pill per failure reason. Colour = kind of problem. */
+.err-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(229, 96, 75, 0.12);
+  color: var(--danger);
+}
+
+.err-badge::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.err-badge-required {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.err-badge-type {
+  background: rgba(229, 96, 75, 0.12);
+  color: var(--danger);
+}
+
+.err-badge-database {
+  background: var(--thread-bg);
+  color: var(--thread);
+}
+
+.err-badge-other {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+/* The clickable "N failed" pill in the history table. */
+.err-badge-count::before {
+  display: none;
+}
+
+.err-badge-button {
+  border: 1px solid transparent;
+  font-family: var(--mono);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.err-badge-button:hover,
+.err-badge-active {
+  border-color: rgba(229, 96, 75, 0.5);
+}
+
+.err-badge-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.err-empty {
+  margin-top: 16px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.err-empty-inline {
+  margin: 0;
+  padding: 20px;
+  text-align: center;
+}
+
+.err-footnote {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+@media (max-width: 720px) {
+  .err-panel-header { flex-direction: column; }
+  .err-header,
+  .err-row { grid-template-columns: 64px 1fr; }
+}

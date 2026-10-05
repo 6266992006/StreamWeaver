@@ -144,3 +144,30 @@ test("run() calls connect() before touching any model", async () => {
 
   assert.equal(connected, true);
 });
+
+test("diffIndexes: a changed `unique` flag counts as drift", async () => {
+  const model = {
+    schema: { indexes: () => [[{ email: 1 }, { unique: true }]] },
+    collection: {
+      // The DB has the index, but without unique
+      indexes: async () => [{ name: "_id_", key: { _id: 1 } }, { name: "email_1", key: { email: 1 } }],
+      getIndexes: async () => ({}),
+    },
+  };
+  const { toCreate, toDrop } = await diffIndexes(model);
+  assert.deepEqual(toCreate, [{ email: 1 }]);
+  assert.deepEqual(toDrop, [{ email: 1 }]);
+});
+
+test("diffIndexes: matching unique flag means no drift", async () => {
+  const model = {
+    schema: { indexes: () => [[{ email: 1 }, { unique: true }]] },
+    collection: {
+      indexes: async () => [{ name: "_id_", key: { _id: 1 } }, { name: "email_1", key: { email: 1 }, unique: true }],
+      getIndexes: async () => ({}),
+    },
+  };
+  const { toCreate, toDrop } = await diffIndexes(model);
+  assert.deepEqual(toCreate, []);
+  assert.deepEqual(toDrop, []);
+});

@@ -1,7 +1,7 @@
 {
   "name": "streamweaver-backend",
-  "version": "1.5.0",
-  "description": "StreamWeaver Backend - auth, chunked upload, CSV parsing, upload history, DB indexing, and the Week 2/3 DB layer",
+  "version": "1.6.0",
+  "description": "StreamWeaver Backend - auth, chunked upload, CSV parsing + mapping, upload history, DB indexing, live WebSocket progress, and the Week 2/3 DB layer",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -20,7 +20,8 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.5.0",
-    "nodemailer": "^6.9.14"
+    "nodemailer": "^6.9.14",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"

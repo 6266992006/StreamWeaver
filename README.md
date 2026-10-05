@@ -1,154 +1,114 @@
-# StreamWeaver — Development Plan
+# StreamWeaver
 
-**Project:** High-Throughput No-Code ETL Pipeline
-**Focus:** Memory-safe file ingestion (Backend) + Virtualized data preview (Frontend)
-**Stack:** Node.js, Express, Busboy/Multer, Streams API · React, react-window/react-virtualized
+High-throughput, no-code ETL pipeline. Upload a CSV, map its columns,
+and StreamWeaver validates and loads every row — streamed end to end so
+multi-GB files never sit fully in memory on either the client or the
+server.
 
----
-
-## 🎯 Objective
-
-Lay the foundation of StreamWeaver's core promise — handling massive files (5GB+) without crashing. This means:
-
-- **Backend:** Accept file uploads via true streaming, never buffering the full file into memory.
-- **Frontend:** Preview the first 1,000 rows of the uploaded CSV using a virtualized grid, without lagging the DOM.
+**Stack:** React 19 + Vite (frontend) · Node.js + Express + MongoDB (backend) · WebSocket for live progress
 
 ---
 
-## 🔧 BACKEND — Multipart Streaming
+## Quick start
 
-### Backend Problem
+```bash
+# Backend
+cd StreamWeaver-backend
+npm install
+cp .env.example .env   # fill in MONGO_URI, JWT_SECRET
+npm run db:indexes     # one-time: create MongoDB indexes
+npm run dev            # http://localhost:5000
 
-Traditional upload middleware buffers the entire file into RAM before processing, which crashes the Node.js V8 heap on large files. Week 1 replaces this with a true streaming pipeline.
+# Frontend (separate terminal)
+cd StreamWeaver-frontend
+npm install
+npm run dev             # http://localhost:5173
+```
 
-### Backend Tasks
+Sign up in the app, then upload a `.csv` file from the Upload page.
 
-- [ ] Set up Express server with a dedicated `/upload` route
-- [ ] Integrate **Busboy** (or Multer in streaming mode, not `memoryStorage`/`diskStorage`) to parse `multipart/form-data`
-- [ ] Pipe the incoming file stream directly via Node's `stream` module — no `Buffer.concat` or full-file reads
-- [ ] Emit upload progress events (bytes received) for the frontend's future live progress bar (Week 3)
-- [ ] Add stream-level file-type/size validation (reject non-CSV/JSON early)
-- [ ] Test: upload a ~500MB–1GB dummy file and confirm `process.memoryUsage().rss` stays flat
+## Running the tests
 
-### Backend Constraints
-
-- **Never** use `req.body` parsing for the file — it buffers everything
-- **Never** call `fs.readFileSync` or hold the full file in a variable
-- All processing must happen in `data` chunk events or via `.pipe()`
-
-### Example Skeleton (Busboy)
-
-```js
-const Busboy = require('busboy');
-
-app.post('/upload', (req, res) => {
-  const bb = Busboy({ headers: req.headers });
-
-  bb.on('file', (name, fileStream, info) => {
-    let bytesReceived = 0;
-    fileStream.on('data', (chunk) => {
-      bytesReceived += chunk.length;
-      // forward chunk to Week 2's transform stream (not yet built)
-    });
-    fileStream.on('end', () => {
-      console.log(`Upload complete: ${bytesReceived} bytes`);
-    });
-  });
-
-  bb.on('close', () => res.status(200).json({ message: 'Upload streamed successfully' }));
-  req.pipe(bb);
-});
+```bash
+cd StreamWeaver-backend && npm test    # 80 tests
+cd StreamWeaver-frontend && npm test   # 12 tests
 ```
 
 ---
 
-## 🎨 FRONTEND — Virtual Grid
+## What's built so far
 
-### Frontend Problem
+### Week 1 — Foundations
+- Streaming file upload (Busboy), never buffers the full file in memory
+- JWT auth: signup / login, protected routes
+- MongoDB schemas: `User`, `Dataset`, `TransformJob`
+- Frontend: virtualized CSV preview grid (first 1,000 rows), auth pages
 
-Rendering thousands of `<tr>` rows directly into the DOM causes lag or freezes. Virtualization renders only the visible rows, recycling DOM nodes as the user scrolls.
+### Week 2 — Ingest pipeline
+- `streams/bulkInsert.js` — batched `bulkWrite` (1,000 rows/batch), with
+  accurate accounting for partial *and* total batch failures
+- `utils/dbValidators.js` — per-row validation + type casting against a
+  column-mapping config
+- `streams/importPipeline.js` — the full streaming pipeline: validate →
+  map → batch-insert → job progress, backpressure-safe end to end
+- CSV → NDJSON parsing (`streams/csvLineStream.js`, `csvRowToJsonStream.js`)
+  and a column-mapping API (`/api/mapping`)
+- Upload History dashboard: `GET /api/jobs` joins `Dataset` with its
+  latest `TransformJob`; frontend has search, status filters, sorting,
+  pagination
 
-### Frontend Tasks
+### Week 3 — Scale & live progress
+- `config/dbIndexes.js` — explicit index sync/report script
+  (`npm run db:indexes [-- --check]`), compound index on `Dataset` so
+  Upload History stays fast as uploads grow into the thousands
+- `sockets/progressSocket.js` — WebSocket server (`/ws/progress`) pushing
+  live `rowsProcessed` / `rowsFailed` / `rowsPerSec` while a job runs;
+  one batched DB query per tick no matter how many clients are watching;
+  graceful shutdown on `SIGTERM`/`SIGINT`
+- `config/db.js` — tuned for large imports (connection compression, a
+  warm minimum pool, disconnect/reconnect logging)
+- Verified at scale: 100,000-row streaming import in well under a
+  second with ~20MB of heap growth (`tests/largeDataset.test.js`)
 
-- [ ] Set up React app shell (if not already scaffolded) with a file upload input
-- [ ] Parse a preview (first 1,000 rows) client-side using a lightweight parser (PapaParse in preview mode is fine)
-- [ ] Install and configure `react-window` (`FixedSizeList`/`FixedSizeGrid`) or `react-virtualized`
-- [ ] Build a `DataGridPreview` component that:
-  - Renders sticky column headers
-  - Renders only visible rows via windowing
-  - Handles variable column widths gracefully
-- [ ] Confirm smooth scrolling with ~1,000 rows × 10–20 columns of dummy data
-- [ ] Add a basic loading state while the file is being read/parsed
-
-### Frontend Constraints
-
-- Do **not** map 1,000+ rows directly into JSX (`data.map(row => <tr>...)`) — defeats the purpose
-- Only viewport rows (+ small buffer) should exist as DOM nodes at any time
-- Component should be reusable later for the Mapping UI (Week 2) and Refine & Polish (Week 4)
-
-### Example Skeleton (react-window)
-
-```jsx
-import { FixedSizeList as List } from 'react-window';
-
-function DataGridPreview({ rows, columns }) {
-  const Row = ({ index, style }) => (
-    <div style={style} className="grid-row">
-      {columns.map((col) => (
-        <span key={col} className="grid-cell">{rows[index][col]}</span>
-      ))}
-    </div>
-  );
-
-  return (
-    <List height={500} itemCount={rows.length} itemSize={35} width="100%">
-      {Row}
-    </List>
-  );
-}
-
-export default DataGridPreview;
-```
+### Coming up (Week 4)
+- Export processed/cleaned data (CSV/JSON) + downloadable error reports
+- Role-based access (Admin vs Analyst), rate limiting polish, dark mode
 
 ---
 
-## 📁 Suggested Project Structure
+## API routes
+
+| Route | Auth | Purpose |
+|---|---|---|
+| `POST /api/auth/signup`, `/login` | — | Account creation / login |
+| `POST /api/upload` | ✅ | Stream a file to disk, record a `Dataset` |
+| `POST /api/upload/parse` | ✅ | Upload → CSV parsed to NDJSON on disk |
+| `GET /api/parse/lines` | ✅ | Quick CSV line-count/preview |
+| `POST/GET /api/mapping` | ✅ | Save / fetch a user's column-mapping config |
+| `GET /api/jobs` | ✅ | Upload history (Dataset + latest TransformJob) |
+| `ws://.../ws/progress?token=` | ✅ | Live job progress over WebSocket |
+
+`GET /` lists every route the *running* backend actually serves — useful
+for confirming you're not talking to a stale server after pulling changes.
+
+## Project structure
 
 ```text
-streamweaver/
-├── backend/
-│   ├── server.js
-│   ├── routes/
-│   │   └── upload.route.js
-│   ├── middleware/
-│   │   └── streamUpload.middleware.js
-│   └── utils/
-│       └── memoryLogger.js
-└── frontend/
-    └── src/
-        ├── components/
-        │   ├── UploadInput.jsx
-        │   └── DataGridPreview.jsx
-        ├── hooks/
-        │   └── useCsvPreview.js
-        └── App.jsx
+StreamWeaver-backend/
+├── server.js
+├── config/        # db connection + index management
+├── controllers/    routes/        middleware/
+├── models/        # User, Dataset, TransformJob, DatasetRow
+├── streams/       # bulkInsert, importPipeline, CSV parsing
+├── sockets/       # live progress WebSocket
+├── utils/         # validators, job tracking
+├── scripts/       # one-off maintenance (backfillDatasets)
+└── tests/
+
+StreamWeaver-frontend/
+└── src/
+    ├── pages/       # Upload, Dashboard, SignIn/SignUp
+    ├── components/  # VirtualGrid, HistoryTable, ...
+    ├── api/         # backend API calls
+    └── utils/       # history filtering/sorting/formatting
 ```
-
----
-
-## ✅ Acceptance Criteria (End of Week 1)
-
-| Area | Criteria |
-| ---- | --------- |
-
-| Backend | 1GB+ file uploads without RSS memory spiking beyond a small constant overhead (~50–150MB) |
-| Backend | Upload endpoint handles success/failure without buffering the file |
-| Frontend | 1,000-row CSV preview renders instantly, no scroll lag |
-| Frontend | DOM node count stays low regardless of dataset size (verify in dev tools) |
-
----
-
-## 🔗 Dependencies for Week 2
-
-- Backend: expose a readable stream (or emit chunks) so Week 2's `stream.Transform` CSV/JSON parser can consume it.
-- Frontend: `DataGridPreview` must be reusable for the column-mapping UI with drag/select interactions.

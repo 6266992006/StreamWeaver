@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getJobHistory } from '../api/jobApi';
+import { getJobHistory, getJobErrors } from '../api/jobApi';
 import { API_BASE } from '../api/config';
 import HistoryTable from '../components/HistoryTable';
+import ErrorTable from '../components/ErrorTable';
+import { describeErrorsError } from '../utils/errorUtils';
 import {
   FILTER_GROUPS,
   countByGroup,
@@ -79,6 +81,56 @@ const Dashboard = () => {
       cancelled = true;
     };
   }, [token, reloadTick]);
+
+  // --- Failed rows for one file (opened from the "N failed" badge) ---
+  const [errorsJobId, setErrorsJobId] = useState(null);
+  // loading | ready | error
+  const [errorsState, setErrorsState] = useState({ status: 'loading', errors: [], message: '' });
+  const [errorsTick, setErrorsTick] = useState(0); // bumped by "Try again"
+
+  const errorsJob = useMemo(() => jobs.find((j) => j.jobId === errorsJobId) || null, [jobs, errorsJobId]);
+  // Re-fetch when the file changes, and again whenever a running job's failed
+  // count moves (the history poll above updates it) so rows appear as they fail.
+  const errorsFailedCount = errorsJob?.rowsFailed ?? 0;
+  const errorsJobStatus = errorsJob?.status;
+
+  useEffect(() => {
+    if (!token || !errorsJobId) return undefined;
+    let cancelled = false;
+
+    getJobErrors(errorsJobId, token)
+      .then((data) => {
+        if (cancelled) return;
+        setErrorsState({ status: 'ready', errors: data.errors || [], message: '' });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err.response?.status === 401) logoutRef.current();
+        const message = describeErrorsError(err, API_BASE);
+        // A failed refresh keeps the rows already on screen.
+        setErrorsState((prev) =>
+          prev.status === 'ready' ? { ...prev, message } : { status: 'error', errors: [], message }
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, errorsJobId, errorsFailedCount, errorsJobStatus, errorsTick]);
+
+  const handleRetryErrors = () => {
+    setErrorsState({ status: 'loading', errors: [], message: '' });
+    setErrorsTick((n) => n + 1);
+  };
+
+  const handleViewErrors = (job) => {
+    if (job.jobId === errorsJobId) {
+      setErrorsJobId(null); // clicking the open badge again closes it
+      return;
+    }
+    setErrorsState({ status: 'loading', errors: [], message: '' });
+    setErrorsJobId(job.jobId);
+  };
 
   // Auto-refresh only while something is queued or running; a settled history
   // is static, so polling it would just burn through the API rate limit.
@@ -208,7 +260,59 @@ const Dashboard = () => {
             </div>
           )}
 
-          <HistoryTable jobs={paged.items} sort={sort} onSort={handleSort} filtered={isFiltered} />
+          {errorsJob && (
+            <section className="err-panel" aria-label={`Failed rows in ${errorsJob.fileName}`}>
+              <div className="err-panel-header">
+                <div>
+                  <h2>Failed rows</h2>
+                  <p className="err-panel-sub">
+                    {errorsJob.fileName} — {formatCount(errorsJob.rowsFailed)} of {formatCount(errorsJob.totalRows)} rows
+                    {errorsJob.status === 'processing' ? ' (still processing — updates as rows fail)' : ''}
+                  </p>
+                </div>
+                <button type="button" className="btn btn-ghost" onClick={() => setErrorsJobId(null)}>
+                  Close
+                </button>
+              </div>
+
+              {errorsState.status === 'loading' && (
+                <div className="skeleton" aria-busy="true" aria-label="Loading failed rows">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="skeleton-row" />
+                  ))}
+                </div>
+              )}
+
+              {errorsState.status === 'error' && (
+                <div className="error-panel" role="alert">
+                  <p>{errorsState.message}</p>
+                  <button type="button" className="btn btn-ghost" onClick={handleRetryErrors}>
+                    Try again
+                  </button>
+                </div>
+              )}
+
+              {errorsState.status === 'ready' && (
+                <>
+                  {errorsState.message && (
+                    <p className="error-msg" role="alert">
+                      Couldn&apos;t refresh: {errorsState.message}
+                    </p>
+                  )}
+                  <ErrorTable errors={errorsState.errors} totalFailed={errorsJob.rowsFailed} />
+                </>
+              )}
+            </section>
+          )}
+
+          <HistoryTable
+            jobs={paged.items}
+            sort={sort}
+            onSort={handleSort}
+            filtered={isFiltered}
+            onViewErrors={handleViewErrors}
+            selectedJobId={errorsJobId}
+          />
 
           {paged.total > PAGE_SIZE && (
             <div className="pagination">

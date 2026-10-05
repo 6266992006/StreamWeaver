@@ -10,6 +10,8 @@ const authRoutes = require("./routes/authRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const parseRoutes = require("./routes/parseRoutes");
 const mappingRoutes = require("./routes/mappingRoutes");
+const jobRoutes = require("./routes/jobRoutes");
+const { attachProgressSocket, WS_PATH } = require("./sockets/progressSocket");
 
 const app = express();
 
@@ -31,7 +33,7 @@ app.use("/api/", limiter);
 // `routes` lists what THIS running process actually serves. If the frontend
 // says "Route not found", open http://localhost:5000/ — a missing route
 // here means an older copy of the backend is still running and needs a restart.
-const ROUTES = ["/api/auth", "/api/upload", "/api/parse", "/api/jobs"];
+const ROUTES = ["/api/auth", "/api/upload", "/api/parse", "/api/mapping", "/api/jobs", WS_PATH];
 app.get("/", (req, res) => {
   res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 2 - Day 5 (complete))" });
 });
@@ -41,9 +43,10 @@ app.get("/api/health", (req, res) => {
 
 // --- Routes ---
 app.use("/api/auth", authRoutes);       // signup, login, forgot-password (Week 1)
-app.use("/api/upload", uploadRoutes);   // chunked file upload (Week 1)
-app.use("/api/parse", parseRoutes);     // Week 2 — CSV line-split (Day 1) + CSV->JSON (Day 2)
-app.use("/api/mapping", mappingRoutes); // Week 2 Day 3 — column-mapping config
+app.use("/api/upload", uploadRoutes);   // chunked file upload + CSV->NDJSON parse (Week 1/2, Mohan)
+app.use("/api/parse", parseRoutes);     // Week 2 — CSV line-split + CSV->JSON preview (Mohan)
+app.use("/api/mapping", mappingRoutes); // Week 2 Day 3 — column-mapping config (Mohan)
+app.use("/api/jobs", jobRoutes);        // Week 2 — upload history for the Dashboard (Krishna)
 
 // --- 404 handler ---
 app.use((req, res) => {
@@ -77,4 +80,30 @@ server.on("error", (err) => {
   }
   throw err;
 });
+
+// Week 3 — live job progress over WebSocket (Krishna). Shares the HTTP server;
+// clients connect to ws://host:PORT/ws/progress?token=<JWT>.
+const progressHub = attachProgressSocket(server);
+
 connectDB();
+
+// Without this, redeploying/restarting (or Ctrl+C) leaves open WebSocket
+// connections dangling — the process either hangs waiting for them or gets
+// force-killed, and connected browsers see a broken connection instead of a
+// clean close. Close the socket hub first, then stop accepting new HTTP
+// connections, so an in-progress request still gets to finish.
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`\n${signal} received — shutting down...`);
+
+  await progressHub.close();
+  await new Promise((resolve) => server.close(resolve));
+  await mongoose.connection.close().catch(() => {});
+
+  console.log("Shutdown complete.");
+  process.exit(0);
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

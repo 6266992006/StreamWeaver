@@ -16,7 +16,8 @@ mapping me specify kiya tha. Yeh Week 2 ka complete, final version hai.
 ```bash
 npm install
 cp .env.example .env
-npm start
+npm run db:indexes   # ek baar: indexes banao/verify karo
+npm run dev
 ```
 
 ## Test — full flow

@@ -36,17 +36,33 @@ function loadModels(paths = MODELS) {
  * `_id` is never reported — MongoDB manages it and it can't be dropped.
  */
 async function diffIndexes(model) {
-  const declared = model.schema.indexes().map(([keys]) => keys);
-  const existing = await model.collection.getIndexes().catch(() => ({}));
-  const existingKeys = Object.entries(existing)
-    .filter(([name]) => name !== "_id_")
-    .map(([, keys]) => keys);
+  const declared = model.schema.indexes().map(([keys, options]) => ({ keys, unique: Boolean(options && options.unique) }));
 
-  const sameKeys = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  const toCreate = declared.filter((d) => !existingKeys.some((e) => sameKeys(e, d)));
-  const toDrop = existingKeys.filter((e) => !declared.some((d) => sameKeys(d, e)));
+  // collection.indexes() carries the options (unique); getIndexes() only has
+  // the keys. Prefer the former so a changed `unique` flag counts as drift —
+  // an index that's silently non-unique in the DB lets duplicates in.
+  let existing = null;
+  if (typeof model.collection.indexes === "function") {
+    const list = await model.collection.indexes().catch(() => null);
+    if (list) {
+      existing = list
+        .filter((i) => i.name !== "_id_")
+        .map((i) => ({ keys: i.key, unique: Boolean(i.unique) }));
+    }
+  }
+  if (!existing) {
+    const byName = await model.collection.getIndexes().catch(() => ({}));
+    existing = Object.entries(byName)
+      .filter(([name]) => name !== "_id_")
+      .map(([, keys]) => ({ keys, unique: null })); // unique flag unknown: compare keys only
+  }
 
-  return { toCreate, toDrop, existingCount: existingKeys.length };
+  const same = (d, e) =>
+    JSON.stringify(d.keys) === JSON.stringify(e.keys) && (e.unique === null || e.unique === d.unique);
+  const toCreate = declared.filter((d) => !existing.some((e) => same(d, e))).map((d) => d.keys);
+  const toDrop = existing.filter((e) => !declared.some((d) => same(d, e))).map((e) => e.keys);
+
+  return { toCreate, toDrop, existingCount: existing.length };
 }
 
 async function reportModel(model, { check }) {

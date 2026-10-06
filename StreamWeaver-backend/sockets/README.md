@@ -63,6 +63,18 @@ ws.onmessage = (e) => {
   sends the final frame and the socket gets nothing further, and a second
   user is correctly shown "Job not found" for someone else's job.
 
+## Week 3 — Day 6
+
+Found and fixed a real bug: `server.js` declared a `ROUTES` constant (used
+in its own explanatory comment: *"open `/` to see what's actually wired
+up"*) but the `/` and `/api/health` handlers underneath it had been
+overwritten back to an older, hardcoded response that never used it —
+so the diagnostic didn't actually show the routes. Fixed, and added
+`tests/serverSmoke.test.js`, which boots the real `server.js` as a child
+process (not a mocked route handler) specifically to catch this class of
+drift going forward — verified it fails on the old code and passes on
+the fix.
+
 ## Test
 ```bash
 npm test                                   # poora suite (75 tests)

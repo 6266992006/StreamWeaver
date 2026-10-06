@@ -1,0 +1,268 @@
+.signin-page {
+  min-height: 100vh;
+  display: flex;
+  background: #f6f8fc;
+  font-family: Arial, sans-serif;
+}
+
+/* LEFT SIDE */
+
+.signin-left {
+  width: 52%;
+  min-height: 100vh;
+  padding: 40px 65px;
+  color: white;
+  background: linear-gradient(145deg, #071b35, #0d3b6b);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+.signin-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.brand-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #3297f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 21px;
+  font-weight: bold;
+}
+
+.signin-intro {
+  max-width: 540px;
+}
+
+.signin-label {
+  color: #64b4ff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin-bottom: 15px;
+}
+
+.signin-intro h1 {
+  font-size: 48px;
+  line-height: 1.15;
+  margin: 0 0 20px;
+}
+
+.signin-intro h1 span {
+  color: #51aaff;
+}
+
+.signin-description {
+  color: #b8c9dc;
+  font-size: 16px;
+  line-height: 1.7;
+  max-width: 450px;
+  margin-bottom: 30px;
+}
+
+.signin-features {
+  margin-top: 25px;
+}
+
+.signin-features p {
+  color: #dce8f5;
+  font-size: 14px;
+  margin: 15px 0;
+}
+
+.signin-copyright {
+  color: #8193a8;
+  font-size: 12px;
+}
+
+
+/* RIGHT SIDE */
+
+.signin-right {
+  width: 48%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  box-sizing: border-box;
+}
+
+.signin-card {
+  width: 100%;
+  max-width: 430px;
+  background: white;
+  padding: 42px;
+  border-radius: 18px;
+  border: 1px solid #e6ebf2;
+  box-shadow: 0 15px 45px rgba(20, 45, 75, 0.1);
+  box-sizing: border-box;
+}
+
+.card-header {
+  margin-bottom: 30px;
+}
+
+.card-header h2 {
+  color: #172b4d;
+  font-size: 29px;
+  margin: 0 0 8px;
+}
+
+.card-header p {
+  color: #7d8998;
+  font-size: 14px;
+  margin: 0;
+}
+
+
+/* ERROR */
+
+.signin-error {
+  background: #fff1f1;
+  color: #d33a3a;
+  border: 1px solid #ffd0d0;
+  border-radius: 8px;
+  padding: 11px 13px;
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+
+
+/* FORM */
+
+.form-group {
+  margin-bottom: 21px;
+}
+
+.form-group label {
+  display: block;
+  color: #34445a;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.password-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.password-header a {
+  color: #2589ed;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.form-group input {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid #d9e1ea;
+  border-radius: 9px;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+  transition: 0.2s;
+}
+
+.form-group input:focus {
+  border-color: #3295f4;
+  box-shadow: 0 0 0 3px rgba(50, 149, 244, 0.1);
+}
+
+.form-group input::placeholder {
+  color: #a4afbd;
+}
+
+
+/* BUTTON */
+
+.signin-button {
+  width: 100%;
+  height: 49px;
+  border: none;
+  border-radius: 9px;
+  background: linear-gradient(90deg, #2388ed, #36a0ff);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: 0.2s;
+}
+
+.signin-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(35, 136, 237, 0.25);
+}
+
+.signin-button span {
+  font-size: 18px;
+}
+
+
+/* SIGN UP */
+
+.signup-link {
+  text-align: center;
+  margin-top: 25px;
+  color: #7d8998;
+  font-size: 13px;
+}
+
+.signup-link a {
+  color: #2388ed;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.signup-link a:hover,
+.password-header a:hover {
+  text-decoration: underline;
+}
+
+
+/* MOBILE */
+
+@media (max-width: 850px) {
+  .signin-left {
+    display: none;
+  }
+
+  .signin-right {
+    width: 100%;
+    padding: 25px;
+  }
+
+  .signin-card {
+    max-width: 450px;
+  }
+}
+
+@media (max-width: 480px) {
+  .signin-right {
+    padding: 15px;
+  }
+
+  .signin-card {
+    padding: 28px 22px;
+  }
+
+  .card-header h2 {
+    font-size: 25px;
+  }
+}

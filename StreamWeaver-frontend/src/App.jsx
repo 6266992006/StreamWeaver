@@ -37,14 +37,7 @@ function App() {
     </ProtectedRoute>
   }
 />
-<Route
-  path="/mapping"
-  element={
-    <ProtectedRoute>
-      <MappingPage />
-    </ProtectedRoute>
-  }
-/>
+<Route path="/mapping" element={<MappingPage />} />
         </Routes>
       </Router>
     </AuthProvider>

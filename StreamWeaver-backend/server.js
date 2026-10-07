@@ -28,10 +28,16 @@ app.use("/api/", limiter);
 
 // --- Health check ---
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 2 - Day 5 (complete))" });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀", routes: ROUTES });
 });
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "ok", week: 2, day: 5, timestamp: new Date().toISOString() });
+  res.json({
+    success: true,
+    status: "ok",
+    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    routes: ROUTES,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // --- Routes ---

@@ -1,16 +1,19 @@
-# Week 2 — Day 5 — Mapping Applied in Pipeline (Full Week 2 Complete)
+# Week 3 — Day 1 — isolated-vm Sandbox Core (SandboxRunner)
 
-**Kaam:** Day 3 ka saved mapping ab Day 4 ke ETL pipeline ke andar apply hota
-hai — final output NDJSON me columns **renamed** hoke aate hain jaise user ne
-mapping me specify kiya tha. Yeh Week 2 ka complete, final version hai.
+**Kaam:** `isolated-vm` package integrate karna — user-supplied JavaScript
+ko ek alag V8 isolate me, memory-limit aur timeout ke saath, safely run
+karna. Yeh poori Week 3 ka foundation hai: baki saare din isi engine ko
+reuse/extend karte hain.
+
+Yeh Week 1 + Week 2 ke upar bana hai, isliye auth, raw upload, CSV parsing
+aur mapping sab already isme kaam karte hain.
 
 ## Naya kya add hua
-- `streams/mappingTransformStream.js` — `MappingTransformStream` class
-  (JSON object ke keys ko mapping ke hisab se rename karta hai)
-- `controllers/etlController.js` — `parseTransformAndSave()` add kiya
-  (pipeline: `fileStream -> CsvLineStream -> CsvRowToJsonStream ->
-  MappingTransformStream -> NDJSON -> disk`)
-- `routes/uploadRoutes.js` — `POST /api/upload/transform` add kiya
+- `sandbox/sandboxRunner.js` — `SandboxRunner` class: har call par naya
+  isolate banata hai, JS snippet run karta hai, result deta hai, phir
+  isolate dispose kar deta hai
+- `controllers/transformController.js` — `runSnippet()` handler
+- `routes/transformRoutes.js` — `POST /api/sandbox/run`
 
 ## Run
 ```bash
@@ -19,27 +22,24 @@ cp .env.example .env
 npm start
 ```
 
-## Test — full flow
+## Test
 ```bash
-# 1. Mapping save karo (source column -> destination field)
-curl -X POST http://localhost:5000/api/mapping \
+curl -X POST http://localhost:5000/api/sandbox/run \
   -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
-  -d '{"mapping":{"id":"userId","name":"fullName","value":"score"}}'
-
-# 2. Ab transform-upload karo
-curl -X POST http://localhost:5000/api/upload/transform \
-  -H "Authorization: Bearer <token>" \
-  -F "file=@/path/to/data.csv"
+  -d '{"code":"value.toUpperCase()","value":"hello world"}'
 ```
-`parsed/*.mapped.ndjson` file check karo — keys renamed milengi
-(`id` -> `userId`, `name` -> `fullName`, `value` -> `score`).
+Expected: `{"success":true,"result":"HELLO WORLD"}`
 
-Bina mapping save kiye `/api/upload/transform` call karo -> `400` error,
-"POST /api/mapping first" ka message milega.
+## Security — Verified (yeh sabse zaroori test hai)
+- Normal transform (`value.toUpperCase()`, `value * 2`) → sahi result
+- `while(true){}` (infinite loop) → **exactly 1 second me timeout**, server
+  hang nahi hua
+- `require("fs").readFileSync(...)` → `"require is not defined"` — Node
+  ke APIs isolate ke andar bilkul accessible nahi hain
+- `process.exit(1)` → `"process is not defined"` — process bhi accessible
+  nahi
+- In saare attacks ke baad bhi server zinda tha aur health-check normal
+  respond kar raha tha
 
-**Verified (end-to-end):**
-- Mapping save -> transform-upload -> 50,000 rows, sabhi keys correctly renamed
-- Bina mapping ke transform call -> proper `400`, crash nahi hua
-- Week 1 (auth, raw upload) aur Week 2 Day 1-4 (parse/lines, json-preview,
-  upload/parse) sab isi Day 5 build me saath saath kaam karte hain — koi
-  route break nahi hua
+Yeh prove karta hai ki `isolated-vm` sach me isolate karta hai — koi bhi
+user script sirf apne aap ko nuksan pahuncha sakta hai, server ko nahi.

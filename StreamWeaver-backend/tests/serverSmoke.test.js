@@ -78,7 +78,7 @@ test("server.js: the root route actually lists every route it wires up", async (
     // This is the exact bug that slipped through once: a route gets wired
     // with app.use(...) but the diagnostic list above it is never updated
     // to match, so "is my server up to date?" can't be answered by it.
-    for (const route of ["/api/auth", "/api/upload", "/api/parse", "/api/mapping", "/api/jobs", "/ws/progress"]) {
+    for (const route of ["/api/auth", "/api/upload", "/api/parse", "/api/mapping", "/api/jobs", "/api/export", "/ws/progress"]) {
       assert.ok(body.routes?.includes(route), `expected "/" to list ${route}, got: ${JSON.stringify(body.routes)}`);
     }
   } finally {

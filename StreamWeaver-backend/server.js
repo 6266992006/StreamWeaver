@@ -11,6 +11,7 @@ const uploadRoutes = require("./routes/uploadRoutes");
 const parseRoutes = require("./routes/parseRoutes");
 const mappingRoutes = require("./routes/mappingRoutes");
 const jobRoutes = require("./routes/jobRoutes");
+const exportRoutes = require("./routes/exportRoutes");
 const { attachProgressSocket, WS_PATH } = require("./sockets/progressSocket");
 
 const app = express();
@@ -33,7 +34,7 @@ app.use("/api/", limiter);
 // `routes` lists what THIS running process actually serves. If the frontend
 // says "Route not found", open http://localhost:5000/ — a missing route
 // here means an older copy of the backend is still running and needs a restart.
-const ROUTES = ["/api/auth", "/api/upload", "/api/parse", "/api/mapping", "/api/jobs", WS_PATH];
+const ROUTES = ["/api/auth", "/api/upload", "/api/parse", "/api/mapping", "/api/jobs", "/api/export", WS_PATH];
 app.get("/", (req, res) => {
   res.json({ success: true, message: "StreamWeaver backend is running 🚀", routes: ROUTES });
 });
@@ -53,6 +54,7 @@ app.use("/api/upload", uploadRoutes);   // chunked file upload + CSV->NDJSON par
 app.use("/api/parse", parseRoutes);     // Week 2 — CSV line-split + CSV->JSON preview (Mohan)
 app.use("/api/mapping", mappingRoutes); // Week 2 Day 3 — column-mapping config (Mohan)
 app.use("/api/jobs", jobRoutes);        // Week 2 — upload history for the Dashboard (Krishna)
+app.use("/api/export", exportRoutes);   // Week 4 — download processed data as CSV/JSON (Krishna)
 
 // --- 404 handler ---
 app.use((req, res) => {

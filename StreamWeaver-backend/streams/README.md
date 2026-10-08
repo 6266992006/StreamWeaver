@@ -106,6 +106,15 @@ npm run db:indexes -- --check # report drift only, changes nothing (exit
 by upload time, so the compound index lets MongoDB satisfy both without
 an in-memory sort once a user has thousands of uploads.
 
+## Export (Week 4 Day 1)
+
+`controllers/exportController.js` (`GET /api/export/:datasetId?format=csv|json`)
+streams a dataset's processed rows straight to the response via a MongoDB
+cursor — never loaded fully into memory, so a multi-million-row export
+behaves the same as a 10-row one. CSV column headers come from the first
+row's keys; values are RFC 4180-escaped (`utils/csvFormat.js`). Only the
+dataset's own owner can export it (checked the same way as `/api/jobs`).
+
 ## Running the tests
 
 ```bash

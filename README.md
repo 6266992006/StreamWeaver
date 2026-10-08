@@ -7,11 +7,8 @@ server.
 
 **Stack:** React 19 + Vite (frontend) · Node.js + Express + MongoDB (backend) · WebSocket for live progress
 
----
-
 ## Quick start
 
-```bash
 # Backend
 cd StreamWeaver-backend
 npm install
@@ -23,18 +20,13 @@ npm run dev            # http://localhost:5000
 cd StreamWeaver-frontend
 npm install
 npm run dev             # http://localhost:5173
-```
 
 Sign up in the app, then upload a `.csv` file from the Upload page.
 
 ## Running the tests
 
-```bash
 cd StreamWeaver-backend && npm test    # 80 tests
 cd StreamWeaver-frontend && npm test   # 12 tests
-```
-
----
 
 ## What's built so far
 

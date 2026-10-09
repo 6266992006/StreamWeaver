@@ -13,7 +13,6 @@ const generateToken = (userId) => {
 exports.signup = async (req, res) => {
   try {
     const { name, email, password } = req.body;
-
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: "name, email and password are required" });
     }
@@ -28,9 +27,7 @@ exports.signup = async (req, res) => {
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-
     const user = await User.create({ name, email, password: hashedPassword });
-
     const token = generateToken(user._id);
 
     return res.status(201).json({
@@ -49,7 +46,6 @@ exports.signup = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-
     if (!email || !password) {
       return res.status(400).json({ success: false, message: "email and password are required" });
     }
@@ -65,7 +61,6 @@ exports.login = async (req, res) => {
     }
 
     const token = generateToken(user._id);
-
     return res.status(200).json({
       success: true,
       message: "Login successful",
@@ -79,9 +74,6 @@ exports.login = async (req, res) => {
 };
 
 // @route  POST /api/auth/forgot-password
-// Day 4 stub: generates a reset token and stores it. Actual email sending
-// wired up via utils/emailService.js (Week 4 task) — safe to call even
-// without SMTP configured, it just logs the link instead of sending.
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -90,33 +82,26 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const user = await User.findOne({ email: email.toLowerCase() });
-    // Always respond the same way so we don't leak which emails are registered
     if (!user) {
-      return res.status(200).json({
-        success: true,
-        message: "If that email is registered, a reset link has been sent",
-      });
+      return res.status(200).json({ success: true, message: "If that email is registered, a reset link has been sent" });
     }
 
     const resetToken = crypto.randomBytes(32).toString("hex");
     user.resetPasswordToken = crypto.createHash("sha256").update(resetToken).digest("hex");
-    user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 minutes
+    user.resetPasswordExpires = Date.now() + 15 * 60 * 1000;
     await user.save();
 
     const { sendPasswordResetEmail } = require("../utils/emailService");
     await sendPasswordResetEmail(user.email, resetToken);
 
-    return res.status(200).json({
-      success: true,
-      message: "If that email is registered, a reset link has been sent",
-    });
+    return res.status(200).json({ success: true, message: "If that email is registered, a reset link has been sent" });
   } catch (err) {
     console.error("Forgot password error:", err.message);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-// @route  GET /api/auth/me  (protected — proves authMiddleware works)
+// @route  GET /api/auth/me  (protected)
 exports.me = async (req, res) => {
   try {
     const user = await User.findById(req.userId).select("-password");

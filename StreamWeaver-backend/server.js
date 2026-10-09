@@ -9,6 +9,10 @@ const authRoutes = require("./routes/authRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const parseRoutes = require("./routes/parseRoutes");
 const mappingRoutes = require("./routes/mappingRoutes");
+<<<<<<< HEAD
+=======
+const transformRoutes = require("./routes/transformRoutes");
+>>>>>>> 7e91a7126d1742125b9198effed973734b8b460b
 
 const app = express();
 
@@ -28,23 +32,25 @@ app.use("/api/", limiter);
 
 // --- Health check ---
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀", routes: ROUTES });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 3 - Day 1)" });
 });
 app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    status: "ok",
-    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
-    routes: ROUTES,
-    timestamp: new Date().toISOString(),
-  });
+  res.json({ success: true, status: "ok", week: 3, day: 1, timestamp: new Date().toISOString() });
 });
 
 // --- Routes ---
+<<<<<<< HEAD
 app.use("/api/auth", authRoutes);       // signup, login, forgot-password (Week 1)
 app.use("/api/upload", uploadRoutes);   // chunked file upload (Week 1)
 app.use("/api/parse", parseRoutes);     // Week 2 — CSV line-split (Day 1) + CSV->JSON (Day 2)
 app.use("/api/mapping", mappingRoutes); // Week 2 Day 3 — column-mapping config
+=======
+app.use("/api/auth", authRoutes);         // signup, login, forgot-password (Week 1)
+app.use("/api/upload", uploadRoutes);     // chunked file upload (Week 1)
+app.use("/api/parse", parseRoutes);       // Week 2 — CSV line-split + CSV->JSON
+app.use("/api/mapping", mappingRoutes);   // Week 2 — column-mapping config
+app.use("/api/sandbox", transformRoutes); // Week 3 Day 1 — isolated-vm sandbox runner
+>>>>>>> 7e91a7126d1742125b9198effed973734b8b460b
 
 // --- 404 handler ---
 app.use((req, res) => {

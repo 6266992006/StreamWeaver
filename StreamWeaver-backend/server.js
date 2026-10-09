@@ -29,10 +29,10 @@ app.use("/api/", limiter);
 
 // --- Health check ---
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 3 - Day 2)" });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 3 - Day 1)" });
 });
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "ok", week: 3, day: 2, timestamp: new Date().toISOString() });
+  res.json({ success: true, status: "ok", week: 3, day: 1, timestamp: new Date().toISOString() });
 });
 
 // --- Routes ---
@@ -40,7 +40,7 @@ app.use("/api/auth", authRoutes);         // signup, login, forgot-password (Wee
 app.use("/api/upload", uploadRoutes);     // chunked file upload (Week 1)
 app.use("/api/parse", parseRoutes);       // Week 2 — CSV line-split + CSV->JSON
 app.use("/api/mapping", mappingRoutes);   // Week 2 — column-mapping config
-app.use("/api/sandbox", transformRoutes); // Week 3 Day 1 (run) + Day 2 (transform-row)
+app.use("/api/sandbox", transformRoutes); // Week 3 Day 1 — isolated-vm sandbox runner
 
 // --- 404 handler ---
 app.use((req, res) => {
@@ -61,24 +61,3 @@ app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
 });
 connectDB();
-
-// Without this, redeploying/restarting (or Ctrl+C) leaves open WebSocket
-// connections dangling — the process either hangs waiting for them or gets
-// force-killed, and connected browsers see a broken connection instead of a
-// clean close. Close the socket hub first, then stop accepting new HTTP
-// connections, so an in-progress request still gets to finish.
-let shuttingDown = false;
-async function shutdown(signal) {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  console.log(`\n${signal} received — shutting down...`);
-
-  await progressHub.close();
-  await new Promise((resolve) => server.close(resolve));
-  await mongoose.connection.close().catch(() => {});
-
-  console.log("Shutdown complete.");
-  process.exit(0);
-}
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));

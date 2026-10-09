@@ -49,7 +49,6 @@ exports.uploadFile = (req, res) => {
 
   bb.on("close", async () => {
     const savedFile = await writePromise;
-
     if (fileTooBig) {
       return res.status(413).json({ success: false, message: "File exceeds 5GB limit" });
     }

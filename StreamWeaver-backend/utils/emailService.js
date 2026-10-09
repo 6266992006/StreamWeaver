@@ -1,8 +1,7 @@
 const nodemailer = require("nodemailer");
 
-// If SMTP env vars aren't set (common while developing locally),
-// we just log the reset link instead of sending a real email so
-// Week 1 testing never blocks on having a mail account configured.
+// If SMTP env vars aren't set, log the reset link instead of sending a
+// real email so testing never blocks on having a mail account configured.
 exports.sendPasswordResetEmail = async (toEmail, resetToken) => {
   const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
 
@@ -24,7 +23,6 @@ exports.sendPasswordResetEmail = async (toEmail, resetToken) => {
     from: process.env.SMTP_USER,
     to: toEmail,
     subject: "StreamWeaver - Password Reset",
-    html: `<p>Click below to reset your password (valid 15 minutes):</p>
-           <a href="${resetLink}">${resetLink}</a>`,
+    html: `<p>Click below to reset your password (valid 15 minutes):</p><a href="${resetLink}">${resetLink}</a>`,
   });
 };

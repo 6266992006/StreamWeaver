@@ -1,10 +1,5 @@
 const { Transform } = require("stream");
 
-/**
- * Splits a single CSV line into fields, respecting double-quoted fields
- * that may contain commas (e.g. `"Doe, John",25`) and escaped quotes
- * (`""` inside a quoted field means a literal `"`).
- */
 function splitCsvLine(line) {
   const fields = [];
   let current = "";
@@ -12,11 +7,10 @@ function splitCsvLine(line) {
 
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
-
     if (insideQuotes) {
       if (char === '"') {
         if (line[i + 1] === '"') {
-          current += '"'; // escaped quote
+          current += '"';
           i++;
         } else {
           insideQuotes = false;
@@ -40,13 +34,8 @@ function splitCsvLine(line) {
 }
 
 /**
- * CsvRowToJsonStream — a stream.Transform class that sits after
- * CsvLineStream. Input: raw CSV line strings (object mode). Output:
- * plain JS objects, using the FIRST line it receives as the header row
- * and every line after that as a record, e.g.
- *   header: "id,name,value"
- *   row:    "1,John,100"
- *   -> { id: "1", name: "John", value: "100" }
+ * CsvRowToJsonStream — turns CSV line strings into JSON objects, using
+ * the first line as the header row. Handles quoted fields with commas.
  */
 class CsvRowToJsonStream extends Transform {
   constructor(options = {}) {
@@ -58,17 +47,14 @@ class CsvRowToJsonStream extends Transform {
   _transform(line, encoding, callback) {
     try {
       const fields = splitCsvLine(line);
-
       if (!this._headers) {
         this._headers = fields;
-        return callback(); // header row consumed, not emitted as data
+        return callback();
       }
-
       const obj = {};
       this._headers.forEach((header, idx) => {
         obj[header] = fields[idx] !== undefined ? fields[idx] : "";
       });
-
       this._rowCount++;
       this.push(obj);
       callback();

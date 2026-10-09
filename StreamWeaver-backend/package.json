@@ -1,7 +1,7 @@
 {
-  "name": "streamweaver-week3-day1",
+  "name": "streamweaver-week3-day2",
   "version": "1.0.0",
-  "description": "StreamWeaver Backend - Week 3 Day 1: isolated-vm sandbox core (SandboxRunner)",
+  "description": "StreamWeaver Backend - Week 3 Day 2: RowSandbox (reusable isolate, multi-field row transform)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

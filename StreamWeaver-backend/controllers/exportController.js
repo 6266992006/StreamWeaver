@@ -1,7 +1,9 @@
 const mongoose = require("mongoose");
 const Dataset = require("../models/Dataset");
 const DatasetRow = require("../models/DatasetRow");
+const TransformJob = require("../models/TransformJob");
 const { toCsvRow } = require("../utils/csvFormat");
+const { buildErrorReport, reportToCsv, reportFileName, safeFileBase } = require("../utils/errorReportGenerator");
 
 const SUPPORTED_FORMATS = ["csv", "json"];
 
@@ -61,7 +63,7 @@ exports.exportDataset = async (req, res) => {
     return res.status(404).json({ success: false, message: "Dataset not found" });
   }
 
-  const baseName = (dataset.originalFileName || "export").replace(/\.[^/.]+$/, "");
+  const baseName = safeFileBase(dataset.originalFileName, "export");
   res.setHeader("Content-Disposition", `attachment; filename="${baseName}.${format}"`);
   res.setHeader(
     "Content-Type",
@@ -77,6 +79,58 @@ exports.exportDataset = async (req, res) => {
     // Headers (and likely some body) are already sent by this point, so a
     // JSON error response isn't possible — just stop the stream cleanly.
     res.end();
+  }
+};
+
+// @route  GET /api/export/job/:jobId/errors?format=csv|json  (protected)
+// Downloadable report of the rows that failed validation in one import run.
+// The error log is capped server-side (rowsFailed is the true total), so the
+// report carries `truncated` — as a JSON field, and as X-* headers for CSV —
+// to say when the file lists fewer rows than actually failed.
+exports.exportJobErrors = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const format = String(req.query.format || "csv").toLowerCase();
+
+    if (!SUPPORTED_FORMATS.includes(format)) {
+      return res.status(400).json({
+        success: false,
+        message: `format must be one of: ${SUPPORTED_FORMATS.join(", ")}`,
+      });
+    }
+    if (!mongoose.Types.ObjectId.isValid(jobId)) {
+      return res.status(400).json({ success: false, message: "Invalid job id" });
+    }
+
+    // ownerId in the filter: someone else's job looks exactly like a missing one.
+    const job = await TransformJob.findOne({ _id: jobId, ownerId: req.userId })
+      .select("datasetId status totalRows rowsProcessed rowsFailed errorLog")
+      .lean();
+    if (!job) {
+      return res.status(404).json({ success: false, message: "Job not found" });
+    }
+
+    const dataset = await Dataset.findOne({ _id: job.datasetId, ownerId: req.userId })
+      .select("originalFileName")
+      .lean();
+    const report = buildErrorReport(job, dataset?.originalFileName);
+
+    res.setHeader("Content-Disposition", `attachment; filename="${reportFileName(report.fileName, format)}"`);
+    res.setHeader("X-Total-Failed", String(report.rowsFailed));
+    res.setHeader("X-Errors-Included", String(report.included));
+    res.setHeader("X-Errors-Truncated", String(report.truncated));
+    // Lets the browser (cross-origin fetch/axios) read the X-* headers above.
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, X-Total-Failed, X-Errors-Included, X-Errors-Truncated");
+
+    if (format === "json") {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      return res.send(JSON.stringify(report, null, 2));
+    }
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    return res.send(reportToCsv(report));
+  } catch (err) {
+    console.error("Error report export failed:", err.message);
+    return res.status(500).json({ success: false, message: "Could not build the error report" });
   }
 };
 

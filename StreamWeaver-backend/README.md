@@ -1,3 +1,47 @@
+# Week 4 — Day 2 — Downloadable Error Report (Krishna)
+
+**Kaam:** Import ke dauran jo rows validation me fail hue, unki report
+CSV/JSON file ke roop me download karna.
+
+## Naya kya add hua
+- `utils/errorReportGenerator.js` — report banata hai (`buildErrorReport`,
+  `reportToCsv`, `reportFileName`)
+- `controllers/exportController.js` — naya `exportJobErrors` handler
+- `routes/exportRoutes.js` — `GET /api/export/job/:jobId/errors?format=csv|json`
+- `tests/errorReport.test.js` — 11 tests
+
+## Endpoint
+```
+GET /api/export/job/:jobId/errors?format=csv     (default)
+GET /api/export/job/:jobId/errors?format=json
+Authorization: Bearer <JWT>
+```
+- CSV columns: `row,type,reason` (`type` = Missing value / Wrong format / Database / Other,
+  frontend ke filter chips jaisa). Row number header ke baad se gina jata hai.
+- Sirf job ka apna owner download kar sakta hai (doosre ka job = 404).
+- Server error log ko 1000 entries pe cap karta hai, `rowsFailed` asli total hai. Report me
+  `truncated` batata hai ki list adhuri hai: JSON me field, CSV me headers
+  `X-Total-Failed`, `X-Errors-Included`, `X-Errors-Truncated`.
+- CSV injection se bachav: `=`, `+`, `-`, `@` se shuru hone wale reason ke aage `'` lagta hai.
+- Download file ka naam ASCII-safe banta hai (quote/newline header me ghus nahi sakte).
+  Ye fix dataset export (`/api/export/:datasetId`) pe bhi laga.
+
+## Merge ke baad jo toota tha aur theek kiya
+- `server.js` me `<<<<<<< HEAD` conflict markers the (server start hi nahi hota). Saaf kiya,
+  `/api/jobs`, WebSocket progress, `/api/sandbox`, `/api/export` sab wapas wired.
+- `package.json` se `ws` dependency aur `test` / `db:indexes` / `backfill` scripts gayab the
+  ("Cannot find module 'ws'"). Wapas daale, `isolated-vm` rakha.
+- `config/db.js` purane version pe revert tha (Day 4 ki tuning gayab). Restore kiya.
+- `routes/uploadRoutes.js` se `/parse` aur `/transform` hat gaye the. Wapas lagaye.
+
+## Test
+```bash
+npm install
+npm test        # 121 tests
+```
+
+---
+
 # Week 3 — Day 1 — isolated-vm Sandbox Core (SandboxRunner)
 
 **Kaam:** `isolated-vm` package integrate karna — user-supplied JavaScript

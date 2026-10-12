@@ -5,6 +5,7 @@ const helmet = require("helmet");
 
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
+const mappingRoutes = require("./routes/mappingRoutes");
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.get("/api/health", (req, res) => {
 // --- Day 3 deliverable ---
 app.use("/api/auth", authRoutes); // signup, login, protected /me
 
+app.use("/api/mapping", mappingRoutes);
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Route not found" });
 });

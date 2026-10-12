@@ -1,10 +1,48 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MappingForm from '../components/MappingForm';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 
 const MappingPage = () => {
   const { token } = useAuth();
+  
+useEffect(() => {
+  if (!token) return;
+
+  const loadMapping = async () => {
+    try {
+      const response = await axios.get(
+        'http://localhost:5000/api/mapping',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data.mappings?.length > 0) {
+        setMappings(response.data.mappings);
+      } else if (response.data.mapping) {
+        const loadedMappings = Object.entries(
+          response.data.mapping
+        ).map(([source, destination]) => ({
+          source,
+          destination,
+          transform: 'None',
+        }));
+
+        setMappings(loadedMappings);
+      }
+    } catch (error) {
+      if (error.response?.status !== 404) {
+        console.error('Error loading mapping:', error);
+      }
+    }
+  };
+
+  loadMapping();
+}, [token]);
+
   const [mappings, setMappings] = useState([
     {
       source: 'first_name',
@@ -61,7 +99,7 @@ const MappingPage = () => {
 
     const response = await axios.post(
       'http://localhost:5000/api/mapping',
-      { mapping },
+      { mapping, mappings },
       {
         headers: {
           Authorization: `Bearer ${token}`,

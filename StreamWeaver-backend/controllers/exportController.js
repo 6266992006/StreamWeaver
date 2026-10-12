@@ -12,18 +12,95 @@ async function findOwnedDataset(datasetId, ownerId) {
   return Dataset.findOne({ _id: datasetId, ownerId }).lean();
 }
 
+// ---------------------------------------------------------------------
+// Streaming helpers (Week 4 Day 3)
+//
+// A multi-million-row export must never pile up in server memory. Three
+// things make that true:
+//   1. Backpressure — res.write() returns false when the socket's buffer is
+//      full (a slow client); we wait for "drain" before pulling more rows
+//      from MongoDB, so memory stays flat no matter how slow the download.
+//   2. Abort — if the client disconnects, we stop reading the cursor
+//      instead of pulling millions of rows nobody will receive.
+//   3. Chunked writes — rows are joined into ~64KB chunks before each
+//      write, far fewer syscalls than one write per row.
+// ---------------------------------------------------------------------
+const FLUSH_BYTES = 64 * 1024;
+const CURSOR_BATCH_SIZE = 2000;
+// An import that hasn't updated its job for this long is treated as crashed,
+// not "still running" — otherwise a dead job would block exports forever.
+const STALE_JOB_MS = 2 * 60 * 1000;
+
+function createSink(res) {
+  let buffer = "";
+  let aborted = false;
+  const canListen = typeof res.once === "function";
+
+  // 'close' fires when the client goes away (and also after a normal end —
+  // harmless, we're done by then).
+  if (canListen) res.once("close", () => (aborted = true));
+
+  async function flush() {
+    if (!buffer || aborted) {
+      buffer = "";
+      return;
+    }
+    const chunk = buffer;
+    buffer = "";
+    const ok = res.write(chunk);
+    if (ok === false && canListen && !aborted) {
+      await new Promise((resolve) => {
+        const done = () => {
+          res.off("drain", done);
+          res.off("close", done);
+          resolve();
+        };
+        res.once("drain", done);
+        res.once("close", done);
+      });
+    }
+  }
+
+  return {
+    get aborted() {
+      return aborted;
+    },
+    async push(text) {
+      buffer += text;
+      if (buffer.length >= FLUSH_BYTES) await flush();
+    },
+    async finish() {
+      await flush();
+      if (!aborted) res.end();
+    },
+  };
+}
+
+// Closes the MongoDB cursor if the loop stopped early (client left, error).
+async function closeCursor(cursor) {
+  if (cursor && typeof cursor.close === "function") {
+    await Promise.resolve(cursor.close()).catch(() => {});
+  }
+}
+
 // Streams every row as a single JSON array, without ever building the
 // full array in memory — "[" then each row's JSON separated by commas,
-// then "]", written straight to the response as the cursor yields rows.
+// then "]", written to the response as the cursor yields rows.
 async function streamJson(cursor, res) {
-  res.write("[");
+  const sink = createSink(res);
+  await sink.push("[");
   let first = true;
-  for await (const row of cursor) {
-    res.write((first ? "" : ",") + JSON.stringify(row.data ?? {}));
-    first = false;
+  try {
+    for await (const row of cursor) {
+      if (sink.aborted) break;
+      await sink.push((first ? "" : ",") + JSON.stringify(row.data ?? {}));
+      first = false;
+    }
+    await sink.push("]");
+  } finally {
+    await closeCursor(cursor);
   }
-  res.write("]");
-  res.end();
+  await sink.finish();
 }
 
 // Streams a CSV: column headers from the first row's keys (every row in a
@@ -31,19 +108,39 @@ async function streamJson(cursor, res) {
 // then one escaped row per document. A 0-row dataset ends with no header
 // at all — there's nothing to name columns after.
 async function streamCsv(cursor, res) {
+  const sink = createSink(res);
   let columns = null;
-  for await (const row of cursor) {
-    const data = row.data ?? {};
-    if (!columns) {
-      columns = Object.keys(data);
-      res.write(toCsvRow(columns) + "\r\n");
+  try {
+    for await (const row of cursor) {
+      if (sink.aborted) break;
+      const data = row.data ?? {};
+      if (!columns) {
+        columns = Object.keys(data);
+        await sink.push(toCsvRow(columns) + "\r\n");
+      }
+      await sink.push(toCsvRow(columns.map((col) => data[col])) + "\r\n");
     }
-    res.write(toCsvRow(columns.map((col) => data[col])) + "\r\n");
+  } finally {
+    await closeCursor(cursor);
   }
-  res.end();
+  await sink.finish();
 }
 
-// @route  GET /api/export/:datasetId?format=csv|json  (protected)
+// True if an import for this dataset is actively running, i.e. an export
+// right now would silently be missing rows.
+async function hasActiveImport(datasetId) {
+  const since = new Date(Date.now() - STALE_JOB_MS);
+  const job = await TransformJob.findOne({
+    datasetId,
+    status: { $in: ["pending", "processing"] },
+    updatedAt: { $gte: since },
+  })
+    .select("_id")
+    .lean();
+  return Boolean(job);
+}
+
+// @route  GET /api/export/:datasetId?format=csv|json[&force=true]  (protected)
 // Streams a cursor over DatasetRow straight to the response — a
 // multi-million-row dataset exports the same way a 10-row one does,
 // never buffered fully in memory on the server.
@@ -58,26 +155,49 @@ exports.exportDataset = async (req, res) => {
     });
   }
 
-  const dataset = await findOwnedDataset(datasetId, req.userId);
-  if (!dataset) {
-    return res.status(404).json({ success: false, message: "Dataset not found" });
-  }
-
-  const baseName = safeFileBase(dataset.originalFileName, "export");
-  res.setHeader("Content-Disposition", `attachment; filename="${baseName}.${format}"`);
-  res.setHeader(
-    "Content-Type",
-    format === "csv" ? "text/csv; charset=utf-8" : "application/json; charset=utf-8"
-  );
-
-  const cursor = DatasetRow.find({ datasetId: dataset._id }).sort({ rowNumber: 1 }).lean().cursor();
-
   try {
-    await (format === "json" ? streamJson(cursor, res) : streamCsv(cursor, res));
+    const dataset = await findOwnedDataset(datasetId, req.userId);
+    if (!dataset) {
+      return res.status(404).json({ success: false, message: "Dataset not found" });
+    }
+
+    // Exporting mid-import would hand over a silently incomplete file.
+    // ?force=true is the escape hatch for someone who wants it anyway.
+    if (String(req.query.force) !== "true" && (await hasActiveImport(dataset._id))) {
+      return res.status(409).json({
+        success: false,
+        message: "This file is still being imported, so the export would be incomplete. Wait for it to finish (or add ?force=true to download what's there so far).",
+      });
+    }
+
+    const baseName = safeFileBase(dataset.originalFileName, "export");
+    res.setHeader("Content-Disposition", `attachment; filename="${baseName}.${format}"`);
+    res.setHeader(
+      "Content-Type",
+      format === "csv" ? "text/csv; charset=utf-8" : "application/json; charset=utf-8"
+    );
+
+    // Only the mapped fields leave MongoDB (not _id / datasetId / jobId), and
+    // rows come back in big batches. The sort is served by the unique
+    // { datasetId, rowNumber } index, so there's no in-memory sort.
+    const cursor = DatasetRow.find({ datasetId: dataset._id }, { data: 1, rowNumber: 1, _id: 0 })
+      .sort({ rowNumber: 1 })
+      .lean()
+      .cursor({ batchSize: CURSOR_BATCH_SIZE });
+
+    try {
+      await (format === "json" ? streamJson(cursor, res) : streamCsv(cursor, res));
+    } catch (err) {
+      console.error("Export stream error:", err.message);
+      // Headers (and likely some body) are already sent by this point, so a
+      // JSON error response isn't possible — just stop the stream cleanly.
+      res.end();
+    }
   } catch (err) {
-    console.error("Export stream error:", err.message);
-    // Headers (and likely some body) are already sent by this point, so a
-    // JSON error response isn't possible — just stop the stream cleanly.
+    console.error("Export failed:", err.message);
+    if (!res.headersSent) {
+      return res.status(500).json({ success: false, message: "Could not export this file" });
+    }
     res.end();
   }
 };
@@ -135,4 +255,4 @@ exports.exportJobErrors = async (req, res) => {
 };
 
 // Exposed for unit tests only.
-exports._internal = { findOwnedDataset, streamCsv, streamJson, SUPPORTED_FORMATS };
+exports._internal = { findOwnedDataset, streamCsv, streamJson, createSink, hasActiveImport, SUPPORTED_FORMATS, FLUSH_BYTES };

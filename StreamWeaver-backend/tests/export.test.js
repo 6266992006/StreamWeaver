@@ -44,6 +44,12 @@ stubModel("../models/DatasetRow", {
   }),
 });
 
+// An import still running for the dataset blocks the export (409); tests flip this.
+let activeImport = null;
+stubModel("../models/TransformJob", {
+  findOne: () => ({ select() { return this; }, lean: async () => activeImport }),
+});
+
 const { exportDataset } = require("../controllers/exportController");
 
 function fakeRes() {
@@ -160,4 +166,29 @@ test("format matching is case-insensitive", async () => {
   rowsByDataset = { [DATASET_ID]: [{ a: 1 }] };
   const res = await run({ datasetId: DATASET_ID }, { format: "JSON" }, OWNER_ID);
   assert.equal(res.headers["Content-Type"], "application/json; charset=utf-8");
+});
+
+test("a dataset still being imported is a 409, not a silently partial file", async () => {
+  rowsByDataset = { [DATASET_ID]: [{ a: 1 }] };
+  activeImport = { _id: "job1" };
+  try {
+    const res = await run({ datasetId: DATASET_ID }, { format: "csv" }, OWNER_ID);
+    assert.equal(res.statusCode, 409);
+    assert.match(res.jsonBody.message, /still being imported/);
+    assert.equal(res.body(), ""); // nothing was streamed
+  } finally {
+    activeImport = null;
+  }
+});
+
+test("?force=true downloads what's there even while an import is running", async () => {
+  rowsByDataset = { [DATASET_ID]: [{ a: 1 }] };
+  activeImport = { _id: "job1" };
+  try {
+    const res = await run({ datasetId: DATASET_ID }, { format: "csv", force: "true" }, OWNER_ID);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body(), "a\r\n1\r\n");
+  } finally {
+    activeImport = null;
+  }
 });

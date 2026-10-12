@@ -1,7 +1,7 @@
 {
-  "name": "streamweaver-week3-day3",
+  "name": "streamweaver-week3-day4",
   "version": "1.0.0",
-  "description": "StreamWeaver Backend - Week 3 Day 3: transform-config save/get API (per-user custom field transforms)",
+  "description": "StreamWeaver Backend - Week 3 Day 4: saved transform config applied live during CSV upload streaming",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

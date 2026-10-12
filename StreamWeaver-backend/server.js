@@ -29,10 +29,10 @@ app.use("/api/", limiter);
 
 // --- Health check ---
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 3 - Day 3)" });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 3 - Day 4)" });
 });
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "ok", week: 3, day: 3, timestamp: new Date().toISOString() });
+  res.json({ success: true, status: "ok", week: 3, day: 4, timestamp: new Date().toISOString() });
 });
 
 // --- Routes ---
@@ -40,7 +40,7 @@ app.use("/api/auth", authRoutes);         // signup, login, forgot-password (Wee
 app.use("/api/upload", uploadRoutes);     // chunked file upload (Week 1)
 app.use("/api/parse", parseRoutes);       // Week 2 — CSV line-split + CSV->JSON
 app.use("/api/mapping", mappingRoutes);   // Week 2 — column-mapping config
-app.use("/api/sandbox", transformRoutes); // Week 3 Day 1 (run) + Day 2 (transform-row) + Day 3 (config)
+app.use("/api/sandbox", transformRoutes); // Week 3 Day 1 (run) + Day 2 (transform-row) + Day 3 (config) + Day 4 (transform-upload)
 
 // --- 404 handler ---
 app.use((req, res) => {

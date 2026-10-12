@@ -1,7 +1,13 @@
 {
+<<<<<<< HEAD
   "name": "streamweaver-backend",
   "version": "1.8.0",
   "description": "StreamWeaver Backend - auth, chunked upload, CSV parsing + mapping, sandboxed transforms, upload history, DB indexing, live WebSocket progress, export + error reports",
+=======
+  "name": "streamweaver-week3-day5",
+  "version": "1.0.0",
+  "description": "StreamWeaver Backend - Week 3 Day 5: end-to-end transform pipeline with saved file download",
+>>>>>>> d7fdc0f (Update data transformation and output handling)
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

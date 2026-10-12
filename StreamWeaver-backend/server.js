@@ -46,6 +46,7 @@ const ROUTES = [
   WS_PATH,
 ];
 app.get("/", (req, res) => {
+<<<<<<< HEAD
   res.json({ success: true, message: "StreamWeaver backend is running 🚀", routes: ROUTES });
 });
 app.get("/api/health", (req, res) => {
@@ -66,6 +67,20 @@ app.use("/api/mapping", mappingRoutes); // Week 2 Day 3 — column-mapping confi
 app.use("/api/jobs", jobRoutes);        // Week 2 — upload history + failed rows for the Dashboard (Krishna)
 app.use("/api/sandbox", transformRoutes); // Week 3 — isolated-vm sandbox runner (Mohan)
 app.use("/api/export", exportRoutes);   // Week 4 — export data + error reports (Krishna)
+=======
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 3 - Day 5)" });
+});
+app.get("/api/health", (req, res) => {
+  res.json({ success: true, status: "ok", week: 3, day: 5, timestamp: new Date().toISOString() });
+});
+
+// --- Routes ---
+app.use("/api/auth", authRoutes);         // signup, login, forgot-password (Week 1)
+app.use("/api/upload", uploadRoutes);     // chunked file upload (Week 1)
+app.use("/api/parse", parseRoutes);       // Week 2 — CSV line-split + CSV->JSON
+app.use("/api/mapping", mappingRoutes);   // Week 2 — column-mapping config
+app.use("/api/sandbox", transformRoutes); // Week 3 Day 1 (run) + Day 2 (transform-row) + Day 3 (config) + Day 4 (transform-upload) + Day 5 (transform-download + download)
+>>>>>>> d7fdc0f (Update data transformation and output handling)
 
 // --- 404 handler ---
 app.use((req, res) => {

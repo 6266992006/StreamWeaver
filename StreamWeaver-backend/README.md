@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Week 4 — Day 3 + Day 4 — Export hardening & final DB performance pass (Krishna)
 
 **Kaam:** Export ko production-grade banana (memory-safe, slow client / disconnect
@@ -90,32 +91,42 @@ npm test        # 127 tests
 ---
 
 # Week 3 — Day 3 — Transform-Config Save/Get API
+=======
+# Week 3 — Day 5 — End-to-End: Transform, Save, Download (Week 3 Complete)
+>>>>>>> d7fdc0f (Update data transformation and output handling)
 
-**Kaam:** Day 3 me user apna transform config save kar sakta tha, par wo
-kahi use nahi ho raha tha. Day 4 me wahi saved config **real CSV upload
-ke stream ke andar hi, row-by-row, live apply** hota hai — ek hi
-HTTP call me: file upload → line split → JSON convert → **saved
-transform apply** → response. Poori file kabhi memory me buffer nahi
-hoti.
+**Kaam:** Day 4 me saved transform config CSV upload ke stream me live
+apply hoti thi, par sirf ek **preview** (pehli 5 rows) wapas aata tha.
+Day 5 me poora pipeline **end-to-end** complete hua: upload → parse →
+transform → **poori output file NDJSON format me disk par save** →
+alag `download` endpoint se wo file **fetch** kar sakte ho. Isi ke saath
+**Week 3 complete** ho jaata hai.
 
-Yeh Week 1 + Week 2 + Week 3 Day 1-3 ke upar bana hai — auth, raw upload,
+Yeh Week 1 + Week 2 + Week 3 Day 1-4 ke upar bana hai — auth, raw upload,
 CSV parsing, column mapping, sandbox/run, transform-row, config
-save/get, sab already isme kaam karte hain.
+save/get, aur live-preview transform-upload, sab already isme kaam karte
+hain.
 
-## Naya kya add hua (Day 4)
-- `streams/fieldTransformStream.js` — `FieldTransformStream` class:
-  `stream.Transform` jo `RowSandbox` (Day 2) ko wrap karta hai. Ek hi
-  isolate banta hai (static `create()` factory se), phir har row jo
-  stream se guzarti hai usi isolate ko reuse karke transform hoti hai —
-  bilkul `MappingTransformStream` (Week 2) jaisa shape, bas JS sandbox ke
-  saath.
-- `controllers/transformController.js` — `transformUpload()` handler:
-  `CsvLineStream → CsvRowToJsonStream → FieldTransformStream` pipeline
-  banata hai, user ka Day 3 wala saved config load karke sandbox init
-  karta hai, aur stream khatam hone par total rows + headers + preview
-  (pehli 5 rows) return karta hai.
-- `routes/transformRoutes.js` — `POST /api/sandbox/transform-upload` add
-  kiya.
+## Naya kya add hua (Day 5)
+- `streams/ndjsonStringifyStream.js` — `NdjsonStringifyStream`:
+  `stream.Transform` jo har JS object row ko ek NDJSON line
+  (`JSON.stringify(row) + "\n"`) me convert karta hai, taaki seedha disk
+  par likha ja sake — kabhi bhi poori file memory me nahi aati, chahe
+  lakhon rows ho
+- `models/outputFileStore.js` — generated output files ka in-memory
+  record (`fileId → { userId, filePath, fileName, rowCount }`), taaki
+  download endpoint pata laga sake ki file kis user ki hai
+- `controllers/transformController.js` —
+  - `transformUploadToFile()` — Day 4 jaisa hi pipeline, bas aakhir me
+    `NdjsonStringifyStream` → `fs.createWriteStream()` se seedha disk
+    par likhta hai; ek random 64-char hex `fileId` generate karke response
+    me `downloadUrl` ke saath return karta hai
+  - `downloadOutput()` — `fileId` ko strict hex pattern se validate
+    karta hai, sirf wahi user download kar sakta hai jisne file banayi
+    thi (warna `404` — kabhi `403` nahi, taaki koi doosre users ke
+    fileIds exist karte hai ya nahi ye bhi na pata chale)
+- `routes/transformRoutes.js` — `POST /api/sandbox/transform-download`
+  aur `GET /api/sandbox/download/:fileId` add kiye
 
 ## Run
 ```bash
@@ -123,6 +134,10 @@ npm install
 cp .env.example .env
 npm start
 ```
+
+**Note:** `isolated-vm` ek native addon hai (C++ compile hoti hai install
+ke waqt) — `npm install` thoda zyada time le sakta hai (10 second) pehli
+baar, normal hai.
 
 ## Test
 
@@ -133,64 +148,88 @@ curl -X POST http://localhost:5000/api/sandbox/config \
   -d '{"fieldTransforms": {"name": "value.toUpperCase()", "score": "Number(value) * 2"}}'
 ```
 
-Phir CSV upload karo — saved config apne aap stream ke andar apply hogi:
+CSV upload karo aur save-to-file karo:
 ```bash
-curl -X POST http://localhost:5000/api/sandbox/transform-upload \
+curl -X POST http://localhost:5000/api/sandbox/transform-download \
   -H "Authorization: Bearer <token>" -F "file=@yourfile.csv"
 ```
 Response:
 ```json
 {
   "success": true,
-  "fileName": "yourfile.csv",
-  "headers": ["name", "score", "city"],
+  "fileId": "a1b2c3...64-char-hex",
+  "fileName": "yourfile.ndjson",
   "totalRows": 2000,
-  "fieldTransforms": { "name": "value.toUpperCase()", "score": "Number(value) * 2" },
-  "preview": [ { "name": "USER1", "score": 2, "city": "city1" }, ... ]
+  "downloadUrl": "/api/sandbox/download/a1b2c3...64-char-hex"
 }
 ```
-Config na saved ho to `404` — `"No transform config set yet — POST /api/sandbox/config first"`.
 
-## Security / Correctness — Verified (24/24 tests pass)
+Phir download karo:
+```bash
+curl http://localhost:5000/api/sandbox/download/<fileId> \
+  -H "Authorization: Bearer <token>" -o output.ndjson
+```
 
-Fresh install karke, poora server chalakar, terminal se 24 tests kiye:
+## Security / Correctness — Verified (30/30 tests pass)
+
+Fresh install karke, poora server chalakar, terminal se 30 tests kiye:
 
 1. Health check → `200`
 2. Root route → `200`
 3. Week 1 signup bina MongoDB ke → graceful `500`, crash nahi
 4. Week 1 raw upload → `success:true`
-5. Week 2 `parse/lines` → sahi line count
-6. Week 2 `parse/json-preview` → sahi JSON conversion
+5. Week 2 `parse/lines` → sahi
+6. Week 2 `parse/json-preview` → sahi
 7. Week 2 mapping save → `200`
 8. Day 1 `sandbox/run` → sahi
 9. Day 2 `transform-row` → sahi
-10. `transform-upload` config save se PEHLE → `404`
-11. `transform-upload` bina token → `401`
-12. Config save karne ke baad `transform-upload` → **live streamed
-    transform sahi** (`name` uppercase + `score` doubled, `city`
-    untouched) — poori file ek hi call me transform hoke aayi
-13. **Runtime error** (`value.nonExistentMethod()`) ek field par →
-    clean `400`, crash nahi
-14. Broken-script ke turant baad server healthy
-15. **2000-row file** streamed + transformed, `totalRows: 2000` sahi,
-    sirf `482ms` me (poori file memory me buffer nahi hui)
-16. **Infinite loop** ek field par → **217ms me cleanly timeout**
-    (per-field 200ms cap), server hang nahi hua
-17. Infinite-loop ke turant baad server healthy
-18. `require("fs")` escape attempt (runtime par) → blocked, clean error
-19. No-file-received edge case → `400`
-20. Saare attacks ke baad bhi server turant healthy response deta raha
+10. Day 3 config save → `200`
+11. Day 3 config get → `200`
+12. Day 4 `transform-upload` (preview) → sahi
+13. `transform-download` bina token → `401`
+14. `transform-download` → file save hui, `fileId` + `downloadUrl` mila
+15. `download` bina token → `401`
+16. `download` sahi token ke saath → **exact transformed NDJSON content**
+    mila (`{"name":"JOHN","score":42,"city":"pune"}`)
+17. Path-traversal attempt (`../../etc/passwd` as fileId) → route hi
+    match nahi hoti, filesystem tak pahuchta hi nahi
+18. Valid-format par non-existent `fileId` → `404`
+19. **Per-user isolation**: doosre user ne pehle user ka `fileId` use
+    karke download try kiya → `404` (file exist karti hai ye bhi pata
+    nahi chalta)
+20. **5000-row file** → sirf `~2.3s` me transform + save hui
+21. Downloaded file ki line count (`5000`) exactly `totalRows` se match
+    hui, first/last row ka data sahi
+22. **Runtime error** (`value.nonExistentMethod()`) → clean `400`,
+    **partial output file disk se automatically delete ho gayi** (orphan
+    file nahi chhuti)
+23. Server us error ke turant baad healthy
+24. **Infinite loop** ek field par → **~223ms me cleanly timeout**
+    (per-field 200ms cap), partial file yahan bhi clean ho gayi
+25. Server us timeout ke turant baad healthy
+26. `require("fs")` escape attempt → blocked
+27. No-file-received edge case → `400`
+28. Server final health check → `200`
+29. Pehle se saved (successful) files ab bhi download ho rahi hain —
+    baad ke failed attempts ne unhe touch nahi kiya
+30. Saare 29 steps ke baad server ek bhi baar crash nahi hua
 
-Yeh prove karta hai ki saved transform real data par **production-scale
-streaming** me bhi utni hi safe aur fast hai jitni Day 2 ke single-row
-calls me thi — bina poori file memory me laaye, bina kisi ek bure
-script ya row ke poore server ko nuksan pahuchaye.
+Yeh prove karta hai ki Week 3 ka poora goal — **safe, isolated, sandboxed
+JS transforms, live stream ke andar, bina memory buffer kiye, end-to-end
+file download tak** — achieve ho gaya hai, aur har possible failure mode
+(bad script, infinite loop, require/process escape, cross-user access,
+path traversal) cleanly handle hota hai bina server ko kabhi nuksan
+pahunchaye.
 
 ## Important Notes
 - **MongoDB** chahiye signup/login/forgot-password/`/me` jaisi DB-wali
   routes ke liye — MongoDB na chale to bhi server crash nahi hota.
-- Week 1, Week 2 aur Week 3 Day 1-3 ke saare purane routes is Day 4
+- Week 1, Week 2 aur Week 3 Day 1-4 ke saare purane routes is Day 5
   build me bhi saath chalte hain — koi route break nahi hua.
-- `transform-upload` abhi response me preview + totalRows return karta
-  hai (file disk par save nahi karta) — Day 5 me isse end-to-end poora
-  flow (transformed output file save/download) complete kiya jayega.
+- Output files abhi **local disk** (`outputs/` folder) par save hote
+  hain aur record in-memory hai (server restart par record reset hoga,
+  par files disk par rahengi) — production me isse S3/cloud storage +
+  DB record se replace kiya ja sakta hai bina baaki pipeline chhede.
+- **Week 3 yahi complete hota hai**: Day 1 (sandboxed single snippet) →
+  Day 2 (multi-field row transform) → Day 3 (saved config) → Day 4 (live
+  streaming apply) → Day 5 (end-to-end save + download).

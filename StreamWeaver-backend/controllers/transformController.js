@@ -1,7 +1,11 @@
+const busboy = require("busboy");
 const ivm = require("isolated-vm");
 const SandboxRunner = require("../sandbox/sandboxRunner");
 const RowSandbox = require("../sandbox/rowSandbox");
 const transformStore = require("../models/transformStore");
+const CsvLineStream = require("../streams/csvLineStream");
+const CsvRowToJsonStream = require("../streams/csvRowToJsonStream");
+const FieldTransformStream = require("../streams/fieldTransformStream");
 
 const runner = new SandboxRunner({ memoryLimitMb: 8, timeoutMs: 1000 });
 
@@ -122,4 +126,89 @@ exports.getConfig = (req, res) => {
   }
 
   return res.status(200).json({ success: true, ...saved });
+};
+
+// @route  POST /api/sandbox/transform-upload  (protected) — Week 3 Day 4
+// Upload a CSV, stream it through CsvLineStream -> CsvRowToJsonStream ->
+// FieldTransformStream, applying the user's SAVED transform config
+// (from Day 3) to every row live as it streams — no separate call per
+// row (that was Day 2), no buffering the whole file into memory.
+//
+// Requires a transform config to already be saved via
+// POST /api/sandbox/config, same relationship Week 2 Day 4 had with
+// its saved column mapping.
+exports.transformUpload = async (req, res) => {
+  const saved = transformStore.getTransformConfig(req.userId);
+
+  if (!saved) {
+    return res.status(404).json({
+      success: false,
+      message: "No transform config set yet — POST /api/sandbox/config first",
+    });
+  }
+
+  let transformStream;
+  try {
+    transformStream = await FieldTransformStream.create(saved.fieldTransforms, {
+      memoryLimitMb: 16,
+      timeoutMs: 200,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to initialize sandbox", error: err.message });
+  }
+
+  const bb = busboy({ headers: req.headers, limits: { fileSize: 5 * 1024 * 1024 * 1024 } });
+  let fileReceived = false;
+  let responded = false;
+  const previewRows = [];
+
+  const sendOnce = (status, body) => {
+    if (responded) return;
+    responded = true;
+    transformStream.dispose();
+    res.status(status).json(body);
+  };
+
+  bb.on("file", (fieldname, fileStream, info) => {
+    fileReceived = true;
+    const lineStream = new CsvLineStream();
+    const jsonStream = new CsvRowToJsonStream();
+
+    fileStream.pipe(lineStream).pipe(jsonStream).pipe(transformStream);
+
+    transformStream.on("data", (row) => {
+      if (previewRows.length < 5) previewRows.push(row);
+    });
+    transformStream.on("end", () => {
+      sendOnce(200, {
+        success: true,
+        fileName: info.filename,
+        headers: jsonStream.headers,
+        totalRows: transformStream.rowCount,
+        fieldTransforms: saved.fieldTransforms,
+        preview: previewRows,
+      });
+    });
+    // A bad script on real data (e.g. `.toUpperCase()` on a numeric
+    // field) surfaces here as a stream error — the sandbox already
+    // contained the damage, we just report it cleanly.
+    transformStream.on("error", (err) => {
+      sendOnce(400, { success: false, message: "Transform failed during streaming", error: err.message });
+    });
+    jsonStream.on("error", (err) => {
+      sendOnce(500, { success: false, message: "Failed to convert CSV rows to JSON", error: err.message });
+    });
+    lineStream.on("error", (err) => {
+      sendOnce(500, { success: false, message: "Failed to parse file into lines", error: err.message });
+    });
+  });
+
+  bb.on("close", () => {
+    if (!fileReceived) sendOnce(400, { success: false, message: "No file received" });
+  });
+  bb.on("error", (err) => {
+    sendOnce(500, { success: false, message: "Upload failed", error: err.message });
+  });
+
+  req.pipe(bb);
 };

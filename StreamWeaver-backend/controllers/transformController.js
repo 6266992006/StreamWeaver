@@ -1,9 +1,26 @@
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+const busboy = require("busboy");
 const ivm = require("isolated-vm");
 const SandboxRunner = require("../sandbox/sandboxRunner");
 const RowSandbox = require("../sandbox/rowSandbox");
 const transformStore = require("../models/transformStore");
+const outputFileStore = require("../models/outputFileStore");
+const CsvLineStream = require("../streams/csvLineStream");
+const CsvRowToJsonStream = require("../streams/csvRowToJsonStream");
+const FieldTransformStream = require("../streams/fieldTransformStream");
+const NdjsonStringifyStream = require("../streams/ndjsonStringifyStream");
 
 const runner = new SandboxRunner({ memoryLimitMb: 8, timeoutMs: 1000 });
+
+// Where Day 5's generated NDJSON output files live. Fixed, never built
+// from user input, so there is no path-traversal surface here — the
+// only user-influenced piece is fileId, and that's validated against a
+// strict hex pattern before it's ever used to build a path (see
+// downloadOutput below).
+const OUTPUT_DIR = path.join(__dirname, "..", "outputs");
+if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
 // @route  POST /api/sandbox/run  (protected) — Week 3 Day 1
 // Body: { "code": "value.toUpperCase()", "value": "hello" }
@@ -122,4 +139,229 @@ exports.getConfig = (req, res) => {
   }
 
   return res.status(200).json({ success: true, ...saved });
+};
+
+// @route  POST /api/sandbox/transform-upload  (protected) — Week 3 Day 4
+// Upload a CSV, stream it through CsvLineStream -> CsvRowToJsonStream ->
+// FieldTransformStream, applying the user's SAVED transform config
+// (from Day 3) to every row live as it streams — no separate call per
+// row (that was Day 2), no buffering the whole file into memory.
+//
+// Requires a transform config to already be saved via
+// POST /api/sandbox/config, same relationship Week 2 Day 4 had with
+// its saved column mapping.
+exports.transformUpload = async (req, res) => {
+  const saved = transformStore.getTransformConfig(req.userId);
+
+  if (!saved) {
+    return res.status(404).json({
+      success: false,
+      message: "No transform config set yet — POST /api/sandbox/config first",
+    });
+  }
+
+  let transformStream;
+  try {
+    transformStream = await FieldTransformStream.create(saved.fieldTransforms, {
+      memoryLimitMb: 16,
+      timeoutMs: 200,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to initialize sandbox", error: err.message });
+  }
+
+  const bb = busboy({ headers: req.headers, limits: { fileSize: 5 * 1024 * 1024 * 1024 } });
+  let fileReceived = false;
+  let responded = false;
+  const previewRows = [];
+
+  const sendOnce = (status, body) => {
+    if (responded) return;
+    responded = true;
+    transformStream.dispose();
+    res.status(status).json(body);
+  };
+
+  bb.on("file", (fieldname, fileStream, info) => {
+    fileReceived = true;
+    const lineStream = new CsvLineStream();
+    const jsonStream = new CsvRowToJsonStream();
+
+    fileStream.pipe(lineStream).pipe(jsonStream).pipe(transformStream);
+
+    transformStream.on("data", (row) => {
+      if (previewRows.length < 5) previewRows.push(row);
+    });
+    transformStream.on("end", () => {
+      sendOnce(200, {
+        success: true,
+        fileName: info.filename,
+        headers: jsonStream.headers,
+        totalRows: transformStream.rowCount,
+        fieldTransforms: saved.fieldTransforms,
+        preview: previewRows,
+      });
+    });
+    // A bad script on real data (e.g. `.toUpperCase()` on a numeric
+    // field) surfaces here as a stream error — the sandbox already
+    // contained the damage, we just report it cleanly.
+    transformStream.on("error", (err) => {
+      sendOnce(400, { success: false, message: "Transform failed during streaming", error: err.message });
+    });
+    jsonStream.on("error", (err) => {
+      sendOnce(500, { success: false, message: "Failed to convert CSV rows to JSON", error: err.message });
+    });
+    lineStream.on("error", (err) => {
+      sendOnce(500, { success: false, message: "Failed to parse file into lines", error: err.message });
+    });
+  });
+
+  bb.on("close", () => {
+    if (!fileReceived) sendOnce(400, { success: false, message: "No file received" });
+  });
+  bb.on("error", (err) => {
+    sendOnce(500, { success: false, message: "Upload failed", error: err.message });
+  });
+
+  req.pipe(bb);
+};
+
+// A download token must look like this (32 bytes hex) or it's rejected
+// outright before ever touching the filesystem or the store.
+const FILE_ID_PATTERN = /^[a-f0-9]{64}$/;
+
+// @route  POST /api/sandbox/transform-download  (protected) — Week 3 Day 5
+// Same pipeline as Day 4's transform-upload, but instead of just
+// returning a preview, the FULL transformed output is streamed straight
+// to an NDJSON file on disk (never buffered in memory) and the caller
+// gets back a one-time fileId to fetch it with via GET
+// /api/sandbox/download/:fileId. This is the "end-to-end" piece Day 4
+// explicitly left for today: upload -> parse -> transform -> save ->
+// download, all without the server ever holding the whole file in RAM.
+exports.transformUploadToFile = async (req, res) => {
+  const saved = transformStore.getTransformConfig(req.userId);
+
+  if (!saved) {
+    return res.status(404).json({
+      success: false,
+      message: "No transform config set yet — POST /api/sandbox/config first",
+    });
+  }
+
+  let transformStream;
+  try {
+    transformStream = await FieldTransformStream.create(saved.fieldTransforms, {
+      memoryLimitMb: 16,
+      timeoutMs: 200,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to initialize sandbox", error: err.message });
+  }
+
+  const fileId = crypto.randomBytes(32).toString("hex");
+  const outputPath = path.join(OUTPUT_DIR, `${fileId}.ndjson`);
+
+  const bb = busboy({ headers: req.headers, limits: { fileSize: 5 * 1024 * 1024 * 1024 } });
+  let fileReceived = false;
+  let responded = false;
+
+  const cleanupPartialFile = () => {
+    fs.unlink(outputPath, () => {}); // best-effort; file may not exist yet
+  };
+
+  const sendOnce = (status, body) => {
+    if (responded) return;
+    responded = true;
+    transformStream.dispose();
+    if (status >= 400) cleanupPartialFile();
+    res.status(status).json(body);
+  };
+
+  bb.on("file", (fieldname, fileStream, info) => {
+    fileReceived = true;
+    const lineStream = new CsvLineStream();
+    const jsonStream = new CsvRowToJsonStream();
+    const ndjsonStream = new NdjsonStringifyStream();
+    const writeStream = fs.createWriteStream(outputPath);
+
+    fileStream.pipe(lineStream).pipe(jsonStream).pipe(transformStream).pipe(ndjsonStream).pipe(writeStream);
+
+    writeStream.on("finish", () => {
+      outputFileStore.registerFile(fileId, {
+        userId: req.userId,
+        filePath: outputPath,
+        fileName: `${(info.filename || "output").replace(/\.csv$/i, "")}.ndjson`,
+        rowCount: transformStream.rowCount,
+      });
+      sendOnce(200, {
+        success: true,
+        message: "File transformed and saved. Use fileId to download it.",
+        fileId,
+        fileName: `${(info.filename || "output").replace(/\.csv$/i, "")}.ndjson`,
+        totalRows: transformStream.rowCount,
+        fieldTransforms: saved.fieldTransforms,
+        downloadUrl: `/api/sandbox/download/${fileId}`,
+      });
+    });
+    writeStream.on("error", (err) => {
+      sendOnce(500, { success: false, message: "Failed to write output file", error: err.message });
+    });
+    // A bad script on real data surfaces here as a stream error — same
+    // as Day 4. The partial output file is deleted (see sendOnce).
+    transformStream.on("error", (err) => {
+      sendOnce(400, { success: false, message: "Transform failed during streaming", error: err.message });
+    });
+    jsonStream.on("error", (err) => {
+      sendOnce(500, { success: false, message: "Failed to convert CSV rows to JSON", error: err.message });
+    });
+    lineStream.on("error", (err) => {
+      sendOnce(500, { success: false, message: "Failed to parse file into lines", error: err.message });
+    });
+  });
+
+  bb.on("close", () => {
+    if (!fileReceived) sendOnce(400, { success: false, message: "No file received" });
+  });
+  bb.on("error", (err) => {
+    sendOnce(500, { success: false, message: "Upload failed", error: err.message });
+  });
+
+  req.pipe(bb);
+};
+
+// @route  GET /api/sandbox/download/:fileId  (protected) — Week 3 Day 5
+// Streams a previously generated output file back to its owner. Two
+// independent checks before any file I/O happens:
+//   1. fileId must match the strict 64-char-hex shape — anything else
+//      (dots, slashes, short ids) is rejected immediately, so there is
+//      no way to turn this into a path-traversal read of an arbitrary
+//      file on disk.
+//   2. The file's registered userId must match req.userId — otherwise
+//      we return the SAME 404 as "file doesn't exist" (never a 403),
+//      so a caller can't use this endpoint to probe which fileIds exist
+//      for other users.
+exports.downloadOutput = (req, res) => {
+  const { fileId } = req.params;
+
+  if (!FILE_ID_PATTERN.test(fileId)) {
+    return res.status(400).json({ success: false, message: "Invalid fileId" });
+  }
+
+  const record = outputFileStore.getFile(fileId);
+
+  if (!record || record.userId !== req.userId) {
+    return res.status(404).json({ success: false, message: "File not found" });
+  }
+
+  if (!fs.existsSync(record.filePath)) {
+    return res.status(404).json({ success: false, message: "File not found" });
+  }
+
+  res.setHeader("Content-Type", "application/x-ndjson");
+  res.setHeader("Content-Disposition", `attachment; filename="${record.fileName}"`);
+  const readStream = fs.createReadStream(record.filePath);
+  readStream.on("error", () => {
+    if (!res.headersSent) res.status(500).json({ success: false, message: "Failed to read file" });
+  });
+  readStream.pipe(res);
 };

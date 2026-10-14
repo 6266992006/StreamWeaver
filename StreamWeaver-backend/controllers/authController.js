@@ -101,6 +101,47 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
+// @route  POST /api/auth/reset-password/:token  — Week 4 Day 2
+// Body: { "password": "newPassword123" }
+// Completes the flow forgotPassword started: hash the incoming raw
+// token the same way it was hashed before storing, look up a user
+// whose stored hash matches AND whose expiry hasn't passed, set the
+// new password, and clear the reset fields so the token is single-use.
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ success: false, message: "Reset token is required" });
+    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ success: false, message: "Password must be at least 6 characters" });
+    }
+
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: "Reset token is invalid or has expired" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    await user.save();
+
+    return res.status(200).json({ success: true, message: "Password has been reset successfully" });
+  } catch (err) {
+    console.error("Reset password error:", err.message);
+    return res.status(500).json({ success: false, message: "Server error during password reset" });
+  }
+};
+
 // @route  GET /api/auth/me  (protected)
 exports.me = async (req, res) => {
   try {

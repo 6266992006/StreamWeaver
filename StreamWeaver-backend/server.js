@@ -23,10 +23,10 @@ app.use("/api/", generalLimiter);
 
 // --- Health check ---
 app.get("/", (req, res) => {
-  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 4 - Day 1)" });
+  res.json({ success: true, message: "StreamWeaver backend is running 🚀 (Week 4 - Day 2)" });
 });
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, status: "ok", week: 4, day: 1, timestamp: new Date().toISOString() });
+  res.json({ success: true, status: "ok", week: 4, day: 2, timestamp: new Date().toISOString() });
 });
 
 // --- Routes ---

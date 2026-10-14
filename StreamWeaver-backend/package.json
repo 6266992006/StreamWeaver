@@ -1,7 +1,7 @@
 {
-  "name": "streamweaver-week3-day4",
+  "name": "streamweaver-week4-day1",
   "version": "1.0.0",
-  "description": "StreamWeaver Backend - Week 3 Day 4: saved transform config applied live during CSV upload streaming",
+  "description": "StreamWeaver Backend - Week 4 Day 1: finalized rate limiting + security headers",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

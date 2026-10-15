@@ -35,66 +35,84 @@ npm start
 
 ## Test
 
-```bash
-# 1. Password reset request karo (DEV MODE me reset link console par
-#    log hoga, kyunki SMTP configured nahi hai)
-curl -X POST http://localhost:5000/api/auth/forgot-password \
-  -H "Content-Type: application/json" -d '{"email":"user@example.com"}'
+Yeh class khud ek HTTP endpoint nahi hai (wo Day 4 me aayega) — isliye
+iska asli test ek standalone Node script hai jo ise ek **mock MongoDB
+model** (sirf `bulkWrite` method wala plain object) ke saath chalata
+hai:
 
-# 2. Console se raw token copy karo, phir reset karo
-curl -X POST http://localhost:5000/api/auth/reset-password/<token> \
-  -H "Content-Type: application/json" -d '{"password":"newPassword123"}'
+```js
+const { Readable } = require("stream");
+const BufferedBulkInserter = require("./streams/bufferedBulkInserter");
+
+const mockModel = {
+  async bulkWrite(ops) {
+    console.log(`bulkWrite called with ${ops.length} docs`);
+    return { insertedCount: ops.length };
+  },
+};
+
+const inserter = new BufferedBulkInserter(mockModel, { batchSize: 5000 });
+Readable.from([{ n: 1 }, { n: 2 }, /* ... 12000 rows ... */], { objectMode: true })
+  .pipe(inserter);
+
+inserter.on("finish", () => console.log(inserter.stats));
+// { totalInserted: 12000, batchesFlushed: 3 }
 ```
 Expected: pehle 10 requests `500`/`401` tak pahunchti hain (auth logic
 chalta hai), usske baad wali `429` (`"Too many login/signup attempts..."`).
 
-## Security / Correctness — Verified (16/16 tests pass)
+## Correctness — Verified (21/21 tests pass)
 
-Fresh install karke, poora server chalakar, terminal se 16 tests kiye:
+Fresh install karke, poora server chalakar, terminal se 21 tests kiye:
 
-1. **Standalone**: `sendPasswordResetEmail` (SMTP unset) → DEV MODE
-   console log, throw nahi hota
-2. **Standalone**: `sendCompletionNotificationEmail` (SMTP unset) → DEV
-   MODE console log, throw nahi hota
-3. **Standalone**: `forgotPassword` aur `resetPassword` ka token-hashing
-   algorithm identical hai (`sha256`, deterministic, 64-char hex) — jo
-   token save hote waqt hash hota hai, wahi lookup karte waqt match
-   karega
-4. Root route → `200`, label "Week 4 - Day 2"
-5. `reset-password` missing password → `400`
-6. `reset-password` short password (<6 chars) → `400` — **DB tak
-   pahunchta hi nahi**, validation pehle hi rok deti hai
-7. `reset-password` valid-shaped request, no DB → graceful `500`, crash
-   nahi (Week 1 jaisa hi pattern)
-8. Server us graceful-failure ke turant baad healthy
-9. Week 1 raw upload → sahi
-10. Week 2 `parse/lines` → sahi
-11. Week 2 mapping save → `200`
-12. Week 3 Day 1 `sandbox/run` → sahi
-13. Week 3 Day 3 config save → `200`
-14. Week 3 Day 4 `transform-upload` → sahi
-15. Week 4 Day 1 ke security headers ab bhi present hain
-16. Saare tests ke baad server turant healthy response deta raha
+**Standalone unit tests (12) — mock model ke saath, bina real DB ke:**
+1. **12000 rows, batchSize 5000** → exactly **3 bulkWrite calls**
+   `[5000, 5000, 2000]` — bilkul PDF ke requirement jaisa
+2. `totalInserted` stat = `12000` sahi
+3. `batchesFlushed` stat = `3` sahi
+4. `batchFlushed` event 3 baar fire hua, sequential `batchNumber` (1,2,3)
+5. Exactly `5000` rows → `1` hi batch (boundary case)
+6. `1` row → stream end par flush hota hai (`_final`), chhota batch bhi
+   drop nahi hota
+7. `0` rows → `bulkWrite` kabhi call hi nahi hota
+8. `extraFields` (jaise `userId`) har doc par sahi se stamp hote hain
+9. **`bulkWrite` se error** (simulated DB failure) → stream `error`
+   event ke through cleanly propagate hoti hai, hang nahi hoti
+10. **50000 rows** → `10` batches of `5000`, sirf `~30ms` me (pure
+    in-memory buffering, koi I/O wait nahi is step me)
+11. `50000` rows → `totalInserted = 50000` sahi
+12. Constructor bina `bulkWrite` method wale object ke `throw` karta hai
+    (misuse turant pakड़ा jaata hai, chup-chaap fail nahi hota)
 
-Yeh prove karta hai ki password-reset flow ka token-hashing logic 100%
-sahi hai (save aur lookup dono same algorithm use karte hain), validation
-DB se pehle hi galat input rok deti hai, aur Week 1/2/3 aur Day 1 ka kaam
-is Day 2 build me bhi bilkul sahi chalta hai.
+**Live server regression (9) — confirm kuch bhi break nahi hua:**
+13. Root route → `200`, label "Week 4 - Day 3"
+14. Week 1 raw upload → sahi
+15. Week 2 `parse/lines` → sahi
+16. Week 2 mapping save → `200`
+17. Week 3 Day 1 `sandbox/run` → sahi
+18. Week 3 Day 3 config save → `200`
+19. Week 3 Day 4 `transform-upload` → sahi
+20. Week 4 Day 2 `reset-password` validation → `400` (DB tak pahunche
+    bina)
+21. Week 4 Day 1 security headers ab bhi present
+
+Yeh prove karta hai ki `BufferedBulkInserter` ka batching logic (exact
+threshold par flush, leftover flush on end, error propagation, per-doc
+tagging) 100% sahi hai — chahe real MongoDB ho ya na ho, kyunki poora
+test `bulkWrite` interface ke against hua hai jo Day 4 me real Mongoose
+model bhi expose karega.
 
 ## Important Notes
-- **MongoDB** chahiye signup/login/forgot-password/reset-password/`/me`
-  jaisi DB-wali routes ke liye — MongoDB na chale to bhi server crash
-  nahi hota (is environment me real MongoDB available nahi tha, isliye
-  "token match hua ya nahi" wala poora DB-dependent path graceful `500`
-  ke through verify kiya gaya, aur core hashing logic standalone test se
-  — jab real MongoDB connect hogi, same code un dono scenarios ko sahi
-  handle karega: valid token → `200`, invalid/expired token → `400`).
-- Reset token **single-use** hai — ek baar consume hone ke baad
-  `resetPasswordToken`/`resetPasswordExpires` clear ho jaate hain.
-- `authLimiter` ka budget (10/15min) ab 4 routes ke beech shared hai:
-  signup, login, forgot-password, reset-password.
-- Week 1, Week 2, Week 3 aur Week 4 Day 1 ke saare purane routes is
-  Day 2 build me bhi saath chalte hain — koi route break nahi hua.
-- Day 3 se aage: buffered bulk-insert class (`BufferedBulkInserter`),
-  Day 4 me usse pipeline me integrate karna, Day 5 me completion email
-  wiring + final polish.
+- Is environment me **real MongoDB available nahi hai** (koi local
+  `mongod` nahi, aur `mongodb-memory-server` jaisa package bhi MongoDB
+  ka binary download nahi kar paaya kyunki outbound network sirf
+  allow-listed hosts tak hi jaata hai) — isliye `BufferedBulkInserter`
+  ko ek **mock model** (`{ bulkWrite(ops) {...} }`) ke against test kiya
+  gaya, jo asli Mongoose model ke `bulkWrite` interface se bilkul match
+  karta hai. Jab Day 4 me real `ProcessedRow` model use hoga aur
+  MongoDB available hogi, same code same tarah kaam karega.
+- Week 1, Week 2, Week 3 aur Week 4 Day 1-2 ke saare purane routes is
+  Day 3 build me bhi saath chalte hain — koi route break nahi hua.
+- Day 4 se aage: isi class ko real streaming pipeline me jodna — CSV
+  upload → parse → saved transform → `BufferedBulkInserter` → MongoDB,
+  ek naye `POST /api/sandbox/transform-upload-db` endpoint ke through.

@@ -1,36 +1,30 @@
-# Week 4 — Day 3 — BufferedBulkInserter (Buffered Bulk-Insert Trigger)
+# Week 4 — Day 1 — Rate Limiting + Security Headers (Finalized)
 
-**Kaam:** Project ka requirement hai — "Implement a buffer mechanism
-that triggers MongoDB `insertMany`/`bulkWrite` operations every 5,000
-records." Day 3 me wahi buffer mechanism banaya: ek real
-`stream.Writable` class jo rows ko memory me buffer karti hai, aur jaise
-hi buffer `5000` tak pahunchta hai, ek hi `bulkWrite` call se poora batch
-insert kar deti hai — kabhi ek-ek row insert nahi karti. Stream khatam
-hone par bachi hui (incomplete) rows bhi automatically flush ho jaati
-hain, taaki kuch bhi silently drop na ho.
+**Kaam:** Week 1 se ek basic rate limiter aur `helmet()` inline server.js
+me lage hue the ("Week 4 task, wired early" comment ke saath). Day 1 me
+inhe **finalize** kiya — apni dedicated files me nikala, aur auth routes
+(signup/login/forgot-password/reset-password) ko ek **alag, zyada strict
+rate limiter** diya taaki brute-force / credential-stuffing attack ka
+apna tight budget ho, baaki API se alag.
 
-Yeh abhi standalone hai — Day 4 me ise real streaming pipeline (upload →
-parse → saved transform) me jodenge. Isliye Day 3 ka poora focus is ek
-class ko bilkul sahi banane aur **thoroughly test** karne par hai.
+Yeh Week 1 + Week 2 + Week 3 (Day 1-5) ke upar bana hai — auth, raw
+upload, CSV parsing, column mapping, sandboxed transforms (single
+snippet, row, saved config, live streaming apply, end-to-end
+save+download) sab already isme kaam karte hain.
 
-Yeh Week 1 + Week 2 + Week 3 (Day 1-5) + Week 4 Day 1-2 ke upar bana hai
-— sab already isme kaam karte hain.
-
-## Naya kya add hua (Day 3)
-- `streams/bufferedBulkInserter.js` — `BufferedBulkInserter` class
-  (`stream.Writable`, object mode):
-  - Rows ko ek internal array me buffer karta hai
-  - Buffer `batchSize` (default `5000`) tak pahunchte hi ek `bulkWrite`
-    call fire karta hai (`insertOne` ops ka array), buffer clear karta
-    hai
-  - Stream khatam (`_final`) hone par agar buffer me kuch bacha ho
-    (chhota, incomplete batch) to usey bhi flush karta hai
-  - `extraFields` option se har doc par extra data (jaise `userId`)
-    stamp kar sakte ho
-  - Deliberately **Mongoose-agnostic** — sirf `model.bulkWrite(ops)`
-    expect karta hai, isliye bina real database ke bhi (mock object se)
-    poori tarah unit-test ho sakta hai, aur kal (Day 4) real
-    `ProcessedRow` Mongoose model ke saath seedha kaam karega
+## Naya kya add hua (Day 1)
+- `middleware/rateLimiter.js` — do limiters export karta hai:
+  - `generalLimiter` — saare `/api/` routes par, 200 requests / 15 min
+    per IP (pehle se tha, bas apni file me nikala)
+  - `authLimiter` — **sirf** signup/login/forgot-password/reset-password
+    par, sirf **10 attempts / 15 min per IP** (naya, strict) — agar koi
+    password guess karne ki koshish kare to sirf 10 hi chance milenge
+- `middleware/security.js` — `helmet()` ka explicit config (CSP,
+  `object-src: none`, HSTS 180 din, `cross-origin-resource-policy`),
+  CORS, aur `x-powered-by` header disable — pehle sab defaults par chal
+  raha tha, ab explicit aur ek hi jagah hai
+- `server.js` aur `routes/authRoutes.js` dono in naye files ko use karte
+  hain ab
 
 ## Run
 ```bash
@@ -64,6 +58,8 @@ Readable.from([{ n: 1 }, { n: 2 }, /* ... 12000 rows ... */], { objectMode: true
 inserter.on("finish", () => console.log(inserter.stats));
 // { totalInserted: 12000, batchesFlushed: 3 }
 ```
+Expected: pehle 10 requests `500`/`401` tak pahunchti hain (auth logic
+chalta hai), usske baad wali `429` (`"Too many login/signup attempts..."`).
 
 ## Correctness — Verified (21/21 tests pass)
 

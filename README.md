@@ -66,8 +66,6 @@ cd StreamWeaver-frontend && npm test   # 12 tests
 - Export processed/cleaned data (CSV/JSON) + downloadable error reports
 - Role-based access (Admin vs Analyst), rate limiting polish, dark mode
 
----
-
 ## API routes
 
 | Route | Auth | Purpose |

@@ -1,7 +1,7 @@
 {
-  "name": "streamweaver-week4-day2",
+  "name": "streamweaver-week4-day3",
   "version": "1.0.0",
-  "description": "StreamWeaver Backend - Week 4 Day 2: password-reset email flow + completion-notification email",
+  "description": "StreamWeaver Backend - Week 4 Day 3: BufferedBulkInserter (buffers rows, bulkWrite every 5000 records)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

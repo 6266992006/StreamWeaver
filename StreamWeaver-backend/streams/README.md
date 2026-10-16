@@ -106,7 +106,7 @@ npm run db:indexes -- --check # report drift only, changes nothing (exit
 by upload time, so the compound index lets MongoDB satisfy both without
 an in-memory sort once a user has thousands of uploads.
 
-## Export (Week 4 Day 1)
+## Export (Week 4)
 
 `controllers/exportController.js` (`GET /api/export/:datasetId?format=csv|json`)
 streams a dataset's processed rows straight to the response via a MongoDB
@@ -114,6 +114,43 @@ cursor — never loaded fully into memory, so a multi-million-row export
 behaves the same as a 10-row one. CSV column headers come from the first
 row's keys; values are RFC 4180-escaped (`utils/csvFormat.js`). Only the
 dataset's own owner can export it (checked the same way as `/api/jobs`).
+
+`GET /api/export/job/:jobId/errors?format=csv|json` downloads a failed-rows
+report for one import run (`utils/errorReportGenerator.js`): sorted by row,
+categorized into the same buckets the frontend's error filter uses
+(Missing value / Wrong format / Database / Other), with CSV-injection
+protection on any reason text that looks like a spreadsheet formula. Built
+in memory rather than streamed — the error log is already capped
+server-side (`MAX_ERROR_LOG` in `utils/jobTracker.js`), so it's bounded by
+design, unlike the full dataset export.
+
+## Final DB/streaming performance pass (Week 4)
+
+`npm run bench:export [rowCount]` runs the *real* export code against a
+generated source and both a fast and an artificially slow client, with no
+database involved — it isolates the streaming layer (chunking,
+backpressure, memory) from MongoDB's own read speed, which depends on the
+deployment. Last run, 50,000 rows:
+
+```
+fast client  50,000 rows  0.13s  398,422 rows/s  2.5MB out  peak queued 64KB  RSS growth 0.0MB
+slow client  50,000 rows  0.11s  468,714 rows/s  2.5MB out  peak queued 64KB  RSS growth 14.2MB
+```
+
+Throughput barely changes against a slow client because `res.write()`'s
+backpressure makes the *export loop* wait, not the server's memory grow —
+confirmed again separately by `tests/largeDataset.test.js` at 100,000 rows
+through the full import pipeline.
+
+Index coverage as of Week 4 (`npm run db:indexes -- --check` audits this
+against the live database):
+
+| Model | Index | Serves |
+|---|---|---|
+| `User` | unique `email` | login/signup lookup |
+| `Dataset` | `ownerId, createdAt desc` | Upload History (filter + sort, no in-memory sort) |
+| `TransformJob` | `ownerId, status` / `datasetId, createdAt desc` | history join, dashboard status queries |
+| `DatasetRow` | unique `datasetId, rowNumber` | import dedup **and** export's `sort({rowNumber:1})` — the export cursor and the import's own uniqueness check share one index |
 
 ## Running the tests
 
@@ -123,7 +160,9 @@ npm install
 npm test
 ```
 
-48 tests across `tests/`: batching and backpressure, partial vs. total
-batch failures, job lifecycle and progress throttling, the full
-streaming pipeline (25,000 rows in one test), the history endpoint, and
-the backfill script's file-name parsing.
+127 tests across `tests/`: batching and backpressure, partial vs. total
+batch failures, job lifecycle and progress throttling, the full streaming
+pipeline (25,000 and 100,000 rows), the history and export endpoints, the
+error-report generator and its CSV-injection guard, live WebSocket
+progress (including a real socket over a real port), and a server smoke
+test that boots the actual `server.js` as a child process.

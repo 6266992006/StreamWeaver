@@ -11,6 +11,9 @@ const CsvLineStream = require("../streams/csvLineStream");
 const CsvRowToJsonStream = require("../streams/csvRowToJsonStream");
 const FieldTransformStream = require("../streams/fieldTransformStream");
 const NdjsonStringifyStream = require("../streams/ndjsonStringifyStream");
+const RowWrapStream = require("../streams/rowWrapStream");
+const BufferedBulkInserter = require("../streams/bufferedBulkInserter");
+const ProcessedRow = require("../models/ProcessedRow");
 
 const runner = new SandboxRunner({ memoryLimitMb: 8, timeoutMs: 1000 });
 
@@ -364,4 +367,98 @@ exports.downloadOutput = (req, res) => {
     if (!res.headersSent) res.status(500).json({ success: false, message: "Failed to read file" });
   });
   readStream.pipe(res);
+};
+
+// @route  POST /api/sandbox/transform-upload-db  (protected) — Week 4 Day 4
+// Same CSV -> parse -> saved-transform pipeline as Week 3 Day 4/5, but
+// the final sink is MongoDB instead of an NDJSON file: rows are wrapped
+// with { userId, jobId, data } (RowWrapStream) and fed into
+// BufferedBulkInserter (Day 3), which buffers up to 5000 rows at a time
+// and fires one bulkWrite per batch against the ProcessedRow collection
+// — never one insert per row, never the whole file in memory.
+//
+// Requires a saved transform config (Day 3 of Week 3), same as
+// transform-upload / transform-download.
+exports.transformUploadToDb = async (req, res) => {
+  const saved = transformStore.getTransformConfig(req.userId);
+
+  if (!saved) {
+    return res.status(404).json({
+      success: false,
+      message: "No transform config set yet — POST /api/sandbox/config first",
+    });
+  }
+
+  let transformStream;
+  try {
+    transformStream = await FieldTransformStream.create(saved.fieldTransforms, {
+      memoryLimitMb: 16,
+      timeoutMs: 200,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to initialize sandbox", error: err.message });
+  }
+
+  const jobId = crypto.randomBytes(16).toString("hex");
+  const bb = busboy({ headers: req.headers, limits: { fileSize: 5 * 1024 * 1024 * 1024 } });
+  let fileReceived = false;
+  let responded = false;
+
+  const sendOnce = (status, body) => {
+    if (responded) return;
+    responded = true;
+    transformStream.dispose();
+    res.status(status).json(body);
+  };
+
+  bb.on("file", (fieldname, fileStream, info) => {
+    fileReceived = true;
+    const lineStream = new CsvLineStream();
+    const jsonStream = new CsvRowToJsonStream();
+    const wrapStream = new RowWrapStream({ userId: req.userId, jobId });
+    const inserter = new BufferedBulkInserter(ProcessedRow, { batchSize: 5000, extraFields: {} });
+
+    fileStream.pipe(lineStream).pipe(jsonStream).pipe(transformStream).pipe(wrapStream).pipe(inserter);
+
+    const batches = [];
+    inserter.on("batchFlushed", (info) => batches.push(info));
+
+    inserter.on("finish", () => {
+      sendOnce(200, {
+        success: true,
+        message: "File transformed and bulk-inserted into MongoDB",
+        jobId,
+        fileName: info.filename,
+        headers: jsonStream.headers,
+        totalRows: inserter.stats.totalInserted,
+        batches: inserter.stats.batchesFlushed,
+        fieldTransforms: saved.fieldTransforms,
+      });
+    });
+    // A DB error (bulkWrite failure — bad connection, validation, etc.)
+    // or a bad script on real data both surface here as a stream error.
+    // The sandbox / DB layer already contained the damage; we just
+    // report it cleanly and the server stays up.
+    inserter.on("error", (err) => {
+      sendOnce(500, { success: false, message: "Bulk insert failed", error: err.message });
+    });
+    transformStream.on("error", (err) => {
+      sendOnce(400, { success: false, message: "Transform failed during streaming", error: err.message });
+    });
+    jsonStream.on("error", (err) => {
+      sendOnce(500, { success: false, message: "Failed to convert CSV rows to JSON", error: err.message });
+    });
+    lineStream.on("error", (err) => {
+      sendOnce(500, { success: false, message: "Failed to parse file into lines", error: err.message });
+    });
+  });
+
+  bb.on("close", () => {
+    if (!fileReceived) sendOnce(400, { success: false, message: "No file received" });
+  });
+  bb.on("error", (err) => {
+    sendOnce(500, { success: false, message: "Upload failed", error: err.message });
+  });
+
+  req.pipe(bb);
 };

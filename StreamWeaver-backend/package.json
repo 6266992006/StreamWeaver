@@ -1,7 +1,7 @@
 {
-  "name": "streamweaver-week4-day3",
+  "name": "streamweaver-week4-day4",
   "version": "1.0.0",
-  "description": "StreamWeaver Backend - Week 4 Day 3: BufferedBulkInserter (buffers rows, bulkWrite every 5000 records)",
+  "description": "StreamWeaver Backend - Week 4 Day 4: saved transform piped into MongoDB via buffered bulk insert",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

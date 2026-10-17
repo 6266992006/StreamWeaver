@@ -18,7 +18,8 @@
     "isolated-vm": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.5.0",
-    "nodemailer": "^6.9.14"
+    "nodemailer": "^6.9.14",
+    "react-window": "^2.3.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"

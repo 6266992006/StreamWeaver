@@ -15,6 +15,7 @@ const RowWrapStream = require("../streams/rowWrapStream");
 const BufferedBulkInserter = require("../streams/bufferedBulkInserter");
 const ProcessedRow = require("../models/ProcessedRow");
 const User = require("../models/User");
+const UploadRecord = require("../models/UploadRecord");
 const { sendCompletionNotificationEmail } = require("../utils/emailService");
 
 const runner = new SandboxRunner({ memoryLimitMb: 8, timeoutMs: 1000 });
@@ -211,6 +212,7 @@ exports.transformUpload = async (req, res) => {
     // field) surfaces here as a stream error — the sandbox already
     // contained the damage, we just report it cleanly.
     transformStream.on("error", (err) => {
+      updateRecord({ status: "failed", error: err.message });
       sendOnce(400, { success: false, message: "Transform failed during streaming", error: err.message });
     });
     jsonStream.on("error", (err) => {
@@ -420,12 +422,21 @@ exports.transformUploadToDb = async (req, res) => {
     const wrapStream = new RowWrapStream({ userId: req.userId, jobId });
     const inserter = new BufferedBulkInserter(ProcessedRow, { batchSize: 5000, extraFields: {} });
 
+    // History record (non-fatal on any DB problem).
+    const recordPromise = UploadRecord.create({
+      userId: req.userId, fileName: info.filename, mimeType: info.mimeType,
+      status: "processing", jobId,
+    }).catch((err) => { console.error("History record failed (non-fatal):", err.message); return null; });
+    const updateRecord = (fields) => recordPromise.then((rec) => rec && UploadRecord.updateOne({ _id: rec._id }, fields))
+      .catch((err) => console.error("History update failed (non-fatal):", err.message));
+
     fileStream.pipe(lineStream).pipe(jsonStream).pipe(transformStream).pipe(wrapStream).pipe(inserter);
 
     const batches = [];
     inserter.on("batchFlushed", (info) => batches.push(info));
 
     inserter.on("finish", () => {
+      updateRecord({ status: "completed", totalRows: inserter.stats.totalInserted, batches: inserter.stats.batchesFlushed });
       sendOnce(200, {
         success: true,
         message: "File transformed and bulk-inserted into MongoDB",
@@ -463,6 +474,7 @@ exports.transformUploadToDb = async (req, res) => {
     // The sandbox / DB layer already contained the damage; we just
     // report it cleanly and the server stays up.
     inserter.on("error", (err) => {
+      updateRecord({ status: "failed", error: err.message });
       sendOnce(500, { success: false, message: "Bulk insert failed", error: err.message });
     });
     transformStream.on("error", (err) => {

@@ -9,6 +9,8 @@ const uploadRoutes = require("./routes/uploadRoutes");
 const parseRoutes = require("./routes/parseRoutes");
 const mappingRoutes = require("./routes/mappingRoutes");
 const transformRoutes = require("./routes/transformRoutes");
+const authMiddleware = require("./middleware/authMiddleware");
+const { getHistory } = require("./controllers/historyController");
 
 const app = express();
 
@@ -31,7 +33,9 @@ app.get("/api/health", (req, res) => {
 
 // --- Routes ---
 app.use("/api/auth", authRoutes);         // signup, login, forgot-password (Week 1)
-app.use("/api/upload", uploadRoutes);     // chunked file upload (Week 1)
+app.use("/api/upload", uploadRoutes);     // chunked file upload (Week 1) + GET /history
+app.get("/api/history", authMiddleware, getHistory); // alias for upload history
+app.get("/api/uploads", authMiddleware, getHistory); // alias for upload history
 app.use("/api/parse", parseRoutes);       // Week 2 — CSV line-split + CSV->JSON
 app.use("/api/mapping", mappingRoutes);   // Week 2 — column-mapping config
 app.use("/api/sandbox", transformRoutes); // Week 3 Day 1-5 (run, transform-row, config, transform-upload, transform-download + download) + Week 4 Day 4 (transform-upload-db) + Day 5 (job status)

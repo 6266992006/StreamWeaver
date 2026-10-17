@@ -2,6 +2,7 @@ const busboy = require("busboy");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const UploadRecord = require("../models/UploadRecord");
 
 // Week 1 — raw chunked upload (streams straight to disk, never buffers
 // the whole file in memory).
@@ -45,6 +46,19 @@ exports.uploadFile = (req, res) => {
     if (!receivedAFile || !savedFile) {
       return res.status(400).json({ success: false, message: "No file received" });
     }
+    // Record for the history page. Fire-and-forget: a DB problem must
+    // never fail or delay an upload that already succeeded on disk.
+    let size = null;
+    try { size = fs.statSync(savedFile.path).size; } catch (e) {}
+    UploadRecord.create({
+      userId: req.userId,
+      fileName: savedFile.originalName,
+      savedAs: savedFile.savedAs,
+      mimeType: savedFile.mimeType,
+      size,
+      status: "uploaded",
+    }).catch((err) => console.error("History record failed (non-fatal):", err.message));
+
     return res.status(201).json({
       success: true,
       message: "File uploaded and streamed to disk successfully",

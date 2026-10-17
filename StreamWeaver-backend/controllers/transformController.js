@@ -14,6 +14,8 @@ const NdjsonStringifyStream = require("../streams/ndjsonStringifyStream");
 const RowWrapStream = require("../streams/rowWrapStream");
 const BufferedBulkInserter = require("../streams/bufferedBulkInserter");
 const ProcessedRow = require("../models/ProcessedRow");
+const User = require("../models/User");
+const { sendCompletionNotificationEmail } = require("../utils/emailService");
 
 const runner = new SandboxRunner({ memoryLimitMb: 8, timeoutMs: 1000 });
 
@@ -434,6 +436,27 @@ exports.transformUploadToDb = async (req, res) => {
         batches: inserter.stats.batchesFlushed,
         fieldTransforms: saved.fieldTransforms,
       });
+
+      // Week 4 Day 5 — completion-notification email, fired AFTER the
+      // HTTP response is already on its way. The job succeeded the
+      // moment the last batch was inserted; notifying the user is a
+      // side effect, not something the caller should have to wait on.
+      // Any failure here (no DB, no such user, SMTP down) is logged and
+      // swallowed — it must never surface as a failure of the upload
+      // that already succeeded.
+      User.findById(req.userId)
+        .select("email")
+        .then((user) => {
+          if (!user) return;
+          return sendCompletionNotificationEmail(user.email, {
+            fileName: info.filename,
+            totalRows: inserter.stats.totalInserted,
+            batches: inserter.stats.batchesFlushed,
+          });
+        })
+        .catch((err) => {
+          console.error("Completion notification email failed (non-fatal):", err.message);
+        });
     });
     // A DB error (bulkWrite failure — bad connection, validation, etc.)
     // or a bad script on real data both surface here as a stream error.
@@ -461,4 +484,35 @@ exports.transformUploadToDb = async (req, res) => {
   });
 
   req.pipe(bb);
+};
+
+// jobId is always a 32-char hex string (crypto.randomBytes(16).toString("hex")),
+// generated server-side in transformUploadToDb — never trust a user-supplied
+// one without checking its shape first.
+const JOB_ID_PATTERN = /^[a-f0-9]{32}$/;
+
+// @route  GET /api/sandbox/job/:jobId/status  (protected) — Week 4 Day 5
+// Rounds out the jobId that transformUploadToDb (Day 4) started tagging
+// every inserted row with: lets the caller ask "how many rows actually
+// landed for this job?" by counting ProcessedRow documents scoped to
+// BOTH jobId and req.userId — so, like Week 3 Day 5's file download,
+// one user can never probe whether another user's jobId exists.
+exports.getJobStatus = async (req, res) => {
+  const { jobId } = req.params;
+
+  if (!JOB_ID_PATTERN.test(jobId)) {
+    return res.status(400).json({ success: false, message: "Invalid jobId" });
+  }
+
+  try {
+    const rowCount = await ProcessedRow.countDocuments({ userId: req.userId, jobId });
+
+    if (rowCount === 0) {
+      return res.status(404).json({ success: false, message: "No rows found for this job" });
+    }
+
+    return res.status(200).json({ success: true, jobId, rowCount });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to fetch job status", error: err.message });
+  }
 };

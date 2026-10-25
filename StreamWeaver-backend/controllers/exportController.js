@@ -2,14 +2,15 @@ const mongoose = require("mongoose");
 const Dataset = require("../models/Dataset");
 const DatasetRow = require("../models/DatasetRow");
 const TransformJob = require("../models/TransformJob");
+const { isAdmin } = require("../utils/roles");
 const { toCsvRow } = require("../utils/csvFormat");
 const { buildErrorReport, reportToCsv, reportFileName, safeFileBase } = require("../utils/errorReportGenerator");
 
 const SUPPORTED_FORMATS = ["csv", "json"];
 
-async function findOwnedDataset(datasetId, ownerId) {
+async function findOwnedDataset(datasetId, ownerId, admin = false) {
   if (!mongoose.Types.ObjectId.isValid(datasetId)) return null;
-  return Dataset.findOne({ _id: datasetId, ownerId }).lean();
+  return Dataset.findOne(admin ? { _id: datasetId } : { _id: datasetId, ownerId }).lean();
 }
 
 // ---------------------------------------------------------------------
@@ -156,7 +157,7 @@ exports.exportDataset = async (req, res) => {
   }
 
   try {
-    const dataset = await findOwnedDataset(datasetId, req.userId);
+    const dataset = await findOwnedDataset(datasetId, req.userId, isAdmin(req));
     if (!dataset) {
       return res.status(404).json({ success: false, message: "Dataset not found" });
     }
@@ -223,14 +224,15 @@ exports.exportJobErrors = async (req, res) => {
     }
 
     // ownerId in the filter: someone else's job looks exactly like a missing one.
-    const job = await TransformJob.findOne({ _id: jobId, ownerId: req.userId })
+    const admin = isAdmin(req);
+    const job = await TransformJob.findOne(admin ? { _id: jobId } : { _id: jobId, ownerId: req.userId })
       .select("datasetId status totalRows rowsProcessed rowsFailed errorLog")
       .lean();
     if (!job) {
       return res.status(404).json({ success: false, message: "Job not found" });
     }
 
-    const dataset = await Dataset.findOne({ _id: job.datasetId, ownerId: req.userId })
+    const dataset = await Dataset.findOne(admin ? { _id: job.datasetId } : { _id: job.datasetId, ownerId: req.userId })
       .select("originalFileName")
       .lean();
     const report = buildErrorReport(job, dataset?.originalFileName);

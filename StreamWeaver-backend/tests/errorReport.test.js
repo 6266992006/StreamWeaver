@@ -156,3 +156,13 @@ test("endpoint: bad job id and bad format are 400s", async () => {
   assert.equal((await call({ jobId: "nope" }, {}, OWNER)).statusCode, 400);
   assert.equal((await call({ jobId: JOB }, { format: "xml" }, OWNER)).statusCode, 400);
 });
+
+// ---------- csvFormat: date columns ----------
+const { toCsvRow } = require("../utils/csvFormat");
+
+test("csv: a Date is written as a plain ISO timestamp, not a JSON-quoted string", () => {
+  const d = new Date("2024-02-11T00:00:00.000Z");
+  assert.equal(toCsvRow([1, d]), "1,2024-02-11T00:00:00.000Z");
+  assert.equal(toCsvRow([new Date("nope")]), ""); // invalid date -> empty cell
+  assert.equal(toCsvRow([{ a: 1 }]), '"{""a"":1}"'); // nested data still JSON
+});

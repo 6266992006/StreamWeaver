@@ -5,9 +5,12 @@ import { API_BASE } from './config';
 // Backend: GET /api/jobs (protected) -> { success, jobs: [...] }
 // Each job: { id, fileName, uploadedAt, sizeBytes, status, totalRows,
 //             rowsProcessed, rowsFailed, rowsPerSec, errorMessage }
-export const getJobHistory = async (token) => {
+// scope: 'mine' (default) or 'all' (admins only: everyone's imports, each with
+// an `owner: { name, email }`).
+export const getJobHistory = async (token, { scope = 'mine' } = {}) => {
   const response = await axios.get(`${API_BASE}/api/jobs`, {
     headers: { Authorization: `Bearer ${token}` },
+    params: scope === 'all' ? { scope: 'all' } : undefined,
   });
   return response.data;
 };

@@ -1,46 +1,26 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { uploadFile } from '../api/uploadApi';
+import { useImport } from '../context/ImportContext';
 import VirtualGrid from '../components/VirtualGrid';
+import Stepper from '../components/Stepper';
+import { PREVIEW_BYTES, estimateRows, headerIssues, parsePreview } from '../utils/csvPreview';
+import { formatBytes, formatCount } from '../utils/historyUtils';
 import './Pages.css';
 
-const PREVIEW_ROW_LIMIT = 1000;
-const PREVIEW_BYTES = 2 * 1024 * 1024; // 2MB is comfortably more than 1,000 CSV rows
-
-// Parses just the first slice of the file client-side, so a multi-GB
-// upload never has to be read fully into browser memory just to show
-// a preview.
-const parsePreview = (text) => {
-  const lines = text.split(/\r\n|\n/).filter((line) => line.length > 0);
-  if (lines.length === 0) return { columns: [], rows: [] };
-
-  const columns = lines[0].split(',').map((c) => c.trim());
-  const rows = lines.slice(1, PREVIEW_ROW_LIMIT + 1).map((line) => {
-    const values = line.split(',');
-    return columns.reduce((acc, col, i) => {
-      acc[col] = (values[i] ?? '').trim();
-      return acc;
-    }, {});
-  });
-
-  return { columns, rows };
-};
-
 const UploadPage = () => {
-  const { token, logout } = useAuth();
+  const { token } = useAuth();
+  const { draft, startDraft } = useImport();
+  const navigate = useNavigate();
   const fileInputRef = useRef(null);
-  // logout() changes identity every render; read it through a ref.
-  const logoutRef = useRef(logout);
-  useEffect(() => {
-    logoutRef.current = logout;
-  });
 
-  const [file, setFile] = useState(null);
-  const [columns, setColumns] = useState([]);
-  const [rows, setRows] = useState([]);
-  const [progress, setProgress] = useState(0);
-  // idle | previewing | uploading | done | error
+  // Coming back from the mapping screen keeps your file and preview.
+  const [file, setFile] = useState(draft?.file || null);
+  const [columns, setColumns] = useState(draft?.columns || []);
+  const [rows, setRows] = useState(draft?.rows || []);
+  const [estimatedRows, setEstimatedRows] = useState(draft?.estimatedRows || 0);
+  const [issues, setIssues] = useState(draft?.issues || []);
+  // idle | previewing | error
   const [status, setStatus] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [dragActive, setDragActive] = useState(false);
@@ -50,39 +30,57 @@ const UploadPage = () => {
       <div className="page">
         <h1>Upload a file</h1>
         <p className="auth-required">
-          Sign in to upload files. <Link to="/signin">Sign in</Link> or{' '}
-          <Link to="/signup">create an account</Link>.
+          Sign in to upload files. <Link to="/signin">Sign in</Link> or <Link to="/signup">create an account</Link>.
         </p>
       </div>
     );
   }
 
+  const fail = (message) => {
+    setFile(null);
+    setRows([]);
+    setColumns([]);
+    setIssues([]);
+    setEstimatedRows(0);
+    setStatus('error');
+    setErrorMsg(message);
+  };
+
   const readFile = async (selected) => {
     // The file picker filters to .csv, but drag-and-drop doesn't.
-    if (!/\.csv$/i.test(selected.name)) {
-      setFile(null);
-      setRows([]);
-      setColumns([]);
-      setStatus('error');
-      setErrorMsg('Only .csv files are supported.');
-      return;
-    }
+    if (!/\.csv$/i.test(selected.name)) return fail('Only .csv files are supported.');
+    if (selected.size === 0) return fail('That file is empty.');
+
     setFile(selected);
     setStatus('previewing');
     setErrorMsg('');
     setRows([]);
     setColumns([]);
+    setIssues([]);
 
     try {
-      const previewSlice = selected.slice(0, PREVIEW_BYTES);
-      const text = await previewSlice.text();
-      const parsed = parsePreview(text);
+      // Only the first slice is read, so even a multi-GB file previews instantly
+      // and never has to fit in browser memory.
+      const isWholeFile = selected.size <= PREVIEW_BYTES;
+      const text = await selected.slice(0, PREVIEW_BYTES).text();
+      const parsed = parsePreview(text, { isWholeFile });
+      if (parsed.columns.length === 0) return fail("Couldn't find a header row in this file.");
+
       setColumns(parsed.columns);
       setRows(parsed.rows);
+      setIssues(headerIssues(parsed.columns));
+      setEstimatedRows(
+        estimateRows({
+          fileSize: selected.size,
+          bytesParsed: parsed.bytesParsed,
+          rowsParsed: parsed.rowsParsed,
+          rowsInSlice: parsed.rowsInSlice,
+          isWholeFile,
+        })
+      );
       setStatus('idle');
     } catch {
-      setStatus('error');
-      setErrorMsg('Could not read this file for preview.');
+      fail('Could not read this file for preview.');
     }
   };
 
@@ -98,108 +96,94 @@ const UploadPage = () => {
     if (dropped) readFile(dropped);
   };
 
-  const handleUpload = async () => {
-    if (!file) return;
-    setStatus('uploading');
-    setProgress(0);
-    setErrorMsg('');
-
-    try {
-      await uploadFile(file, token, setProgress);
-      setStatus('done');
-    } catch (err) {
-      setStatus('error');
-      if (err.response?.status === 401) {
-        setErrorMsg('Your session has expired. Please sign in again.');
-        logoutRef.current();
-      } else if (!err.response) {
-        setErrorMsg("Can't reach the backend. Is it running?");
-      } else {
-        setErrorMsg(err.response.data?.message || 'Upload failed. Please try again.');
-      }
-    }
-  };
-
   const handleReset = () => {
     setFile(null);
     setRows([]);
     setColumns([]);
-    setProgress(0);
+    setIssues([]);
+    setEstimatedRows(0);
     setStatus('idle');
     setErrorMsg('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleContinue = () => {
+    startDraft({ file, columns, rows, estimatedRows, issues });
+    navigate('/mapping');
+  };
+
+  const ready = file && columns.length > 0 && status === 'idle';
+
   return (
-    <div className="page">
-      <h1>Upload a file</h1>
-      <p className="page-sub">CSV files up to 5GB. Rows are validated before anything is saved.</p>
+    <div className="page page-flow">
+      <Stepper current={0} />
+      <h1>Upload a CSV</h1>
+      <p className="page-sub">
+        Files up to 5GB. Nothing is saved yet — next you&apos;ll choose how the columns map and clean up the data.
+      </p>
 
       <button
         type="button"
         className={`dropzone ${dragActive ? 'dropzone-active' : ''}`}
         onClick={() => fileInputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragActive(true);
+        }}
         onDragLeave={() => setDragActive(false)}
         onDrop={handleDrop}
       >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".csv"
-          onChange={handleFileSelect}
-          hidden
-        />
+        <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileSelect} hidden />
         {file ? (
           <span className="dropzone-file">
             <strong>{file.name}</strong>
-            <code>{(file.size / (1024 * 1024)).toFixed(2)} MB</code>
+            <code>{formatBytes(file.size)}</code>
           </span>
         ) : (
-          <span>Drop a CSV here, or click to browse</span>
+          <span className="dropzone-empty">
+            <strong>Drop a CSV here</strong>
+            <span>or click to browse</span>
+          </span>
         )}
       </button>
 
       {status === 'previewing' && <p className="status-line">Reading preview…</p>}
+      {status === 'error' && (
+        <p className="error-msg" role="alert">
+          {errorMsg}
+        </p>
+      )}
+
+      {issues.length > 0 && (
+        <ul className="notice notice-warn" role="alert">
+          {issues.map((issue) => (
+            <li key={issue}>{issue}</li>
+          ))}
+        </ul>
+      )}
 
       {rows.length > 0 && (
         <>
-          <h2>Preview — first {rows.length.toLocaleString()} rows</h2>
+          <div className="preview-head">
+            <h2>Preview — first {formatCount(rows.length)} rows</h2>
+            <span className="preview-meta">
+              {columns.length} columns · about {formatCount(estimatedRows)} rows in total
+            </span>
+          </div>
           <VirtualGrid columns={columns} rows={rows} />
         </>
       )}
 
-      {status !== 'done' && (
+      {file && (
         <div className="upload-actions">
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleUpload}
-            disabled={!file || status === 'uploading'}
-          >
-            {status === 'uploading' ? `Uploading… ${progress}%` : 'Upload'}
+          <button type="button" className="btn btn-primary" onClick={handleContinue} disabled={!ready}>
+            Continue to mapping →
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={handleReset}>
+            Choose a different file
           </button>
         </div>
       )}
-
-      {status === 'uploading' && (
-        <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${progress}%` }} />
-        </div>
-      )}
-
-      {status === 'done' && (
-        <div className="upload-success" role="status">
-          <p>
-            <strong>{file?.name}</strong> uploaded.
-          </p>
-          <div className="upload-success-actions">
-            <Link to="/dashboard" className="btn btn-primary">View history</Link>
-            <button type="button" className="btn btn-ghost" onClick={handleReset}>Upload another</button>
-          </div>
-        </div>
-      )}
-      {status === 'error' && <p className="error-msg">{errorMsg}</p>}
     </div>
   );
 };

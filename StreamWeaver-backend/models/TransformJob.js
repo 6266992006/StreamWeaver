@@ -21,6 +21,10 @@ const transformJobSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed, // { destField: { source, type, required } }
       default: {},
     },
+    fieldTransforms: {
+      type: mongoose.Schema.Types.Mixed, // { sourceColumn: "jsExpression using `value`" }
+      default: {},
+    },
     status: {
       type: String,
       enum: ["pending", "processing", "done", "failed"],

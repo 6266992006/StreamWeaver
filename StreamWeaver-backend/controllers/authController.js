@@ -2,9 +2,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const User = require("../models/User");
+const { resolveRole } = require("../utils/roles");
 
-const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+const generateToken = (userId, role = "analyst") => {
+  return jwt.sign({ id: userId, role }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
 };
@@ -27,14 +28,14 @@ exports.signup = async (req, res) => {
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-    const user = await User.create({ name, email, password: hashedPassword });
-    const token = generateToken(user._id);
+    const user = await User.create({ name, email, password: hashedPassword, role: resolveRole(email) });
+    const token = generateToken(user._id, user.role);
 
     return res.status(201).json({
       success: true,
       message: "User registered successfully",
       token,
-      user: { id: user._id, name: user.name, email: user.email },
+      user: { id: user._id, name: user.name, email: user.email, role: user.role },
     });
   } catch (err) {
     console.error("Signup error:", err.message);
@@ -60,12 +61,19 @@ exports.login = async (req, res) => {
       return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 
-    const token = generateToken(user._id);
+    // Promote anyone newly listed in ADMIN_EMAILS (never demotes).
+    const role = resolveRole(user.email, user.role);
+    if (role !== user.role) {
+      user.role = role;
+      await user.save();
+    }
+
+    const token = generateToken(user._id, user.role);
     return res.status(200).json({
       success: true,
       message: "Login successful",
       token,
-      user: { id: user._id, name: user.name, email: user.email },
+      user: { id: user._id, name: user.name, email: user.email, role: user.role },
     });
   } catch (err) {
     console.error("Login error:", err.message);
@@ -149,7 +157,10 @@ exports.me = async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
-    return res.status(200).json({ success: true, user });
+    return res.status(200).json({
+      success: true,
+      user: { id: user._id, name: user.name, email: user.email, role: user.role || "analyst" },
+    });
   } catch (err) {
     console.error("Me error:", err.message);
     return res.status(500).json({ success: false, message: "Server error" });

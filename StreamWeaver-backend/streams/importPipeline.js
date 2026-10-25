@@ -20,6 +20,12 @@ const { MAX_ERROR_LOG } = require("../utils/jobTracker");
  * the CSV header), i.e. what the user sees in their spreadsheet.
  */
 
+// An earlier stage (e.g. the sandbox transform) that has to reject a row —
+// but must not lose its position, or every later row number in the error
+// report would shift — passes a placeholder object carrying this symbol with
+// the reason. The row is counted as failed and never reaches the database.
+const PRE_FAILED = Symbol.for("streamweaver.rowFailed");
+
 class ValidateAndMap extends Transform {
   constructor({ mappingConfig, buildDocument, onInvalid }) {
     super({ objectMode: true });
@@ -32,6 +38,13 @@ class ValidateAndMap extends Transform {
 
   _transform(row, _encoding, callback) {
     this.rowNumber += 1;
+
+    if (row && row[PRE_FAILED]) {
+      this.invalidCount += 1;
+      this.onInvalid({ row: this.rowNumber, reason: String(row[PRE_FAILED]) });
+      return callback();
+    }
+
     const { valid, errors } = validateRow(row, this.mappingConfig);
 
     if (!valid) {
@@ -149,4 +162,4 @@ async function runImportPipeline({
   };
 }
 
-module.exports = { runImportPipeline, ValidateAndMap };
+module.exports = { runImportPipeline, ValidateAndMap, PRE_FAILED };

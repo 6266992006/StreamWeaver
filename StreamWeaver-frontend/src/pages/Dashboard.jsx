@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getJobHistory, getJobErrors } from '../api/jobApi';
 import { API_BASE } from '../api/config';
+import { downloadErrorReport } from '../api/exportApi';
+import DownloadButton from '../components/DownloadButton';
+import RoleBasedView from '../components/RoleBasedView';
 import HistoryTable from '../components/HistoryTable';
 import ErrorTable from '../components/ErrorTable';
 import { describeErrorsError } from '../utils/errorUtils';
@@ -33,6 +36,9 @@ const Stat = ({ label, value, tone }) => (
 
 const Dashboard = () => {
   const { token, logout } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Admins can switch to everyone's imports; analysts only ever see their own.
+  const [scope, setScope] = useState('mine');
 
   const [jobs, setJobs] = useState([]);
   // loading | ready | error   (error = the very first load failed)
@@ -58,7 +64,7 @@ const Dashboard = () => {
     if (!token) return undefined;
     let cancelled = false;
 
-    getJobHistory(token)
+    getJobHistory(token, { scope })
       .then((data) => {
         if (cancelled) return;
         setJobs(data.jobs || []);
@@ -80,10 +86,12 @@ const Dashboard = () => {
     return () => {
       cancelled = true;
     };
-  }, [token, reloadTick]);
+  }, [token, reloadTick, scope]);
 
   // --- Failed rows for one file (opened from the "N failed" badge) ---
-  const [errorsJobId, setErrorsJobId] = useState(null);
+  // Arriving from /dashboard?errors=<jobId> (the "see why they failed" link on
+  // the import screen) opens that import's failed rows as soon as it's listed.
+  const [errorsJobId, setErrorsJobId] = useState(() => searchParams.get('errors') || null);
   // loading | ready | error
   const [errorsState, setErrorsState] = useState({ status: 'loading', errors: [], message: '' });
   const [errorsTick, setErrorsTick] = useState(0); // bumped by "Try again"
@@ -121,6 +129,19 @@ const Dashboard = () => {
   const handleRetryErrors = () => {
     setErrorsState({ status: 'loading', errors: [], message: '' });
     setErrorsTick((n) => n + 1);
+  };
+
+  // The id is now in state, so the address bar can go back to plain /dashboard.
+  useEffect(() => {
+    if (searchParams.get('errors')) setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const handleScope = (next) => {
+    if (next === scope) return;
+    setScope(next);
+    setStatus('loading');
+    setErrorsJobId(null);
+    setPage(1);
   };
 
   const handleViewErrors = (job) => {
@@ -169,7 +190,7 @@ const Dashboard = () => {
   if (!token) {
     return (
       <div className="page">
-        <h1>Upload history</h1>
+        <h1>Import history</h1>
         <p className="auth-required">
           Sign in to view your uploads. <Link to="/signin">Sign in</Link> or{' '}
           <Link to="/signup">create an account</Link>.
@@ -182,10 +203,22 @@ const Dashboard = () => {
     <div className="page page-wide">
       <div className="page-header">
         <div>
-          <h1>Upload history</h1>
-          <p className="page-sub">Every file you&apos;ve uploaded, and where it stands.</p>
+          <h1>Import history</h1>
+          <p className="page-sub">
+            {scope === 'all' ? "Every import by every user, and where it stands." : "Every file you've imported, and where it stands."}
+          </p>
         </div>
         <div className="page-actions">
+          <RoleBasedView allow={['admin']}>
+            <div className="segmented" role="group" aria-label="Whose imports to show">
+              <button type="button" className={scope === 'mine' ? 'seg-active' : ''} aria-pressed={scope === 'mine'} onClick={() => handleScope('mine')}>
+                Mine
+              </button>
+              <button type="button" className={scope === 'all' ? 'seg-active' : ''} aria-pressed={scope === 'all'} onClick={() => handleScope('all')}>
+                Everyone
+              </button>
+            </div>
+          </RoleBasedView>
           {updatedAt && status === 'ready' && (
             <span className="updated-at">Updated {updatedAt.toLocaleTimeString()}</span>
           )}
@@ -270,9 +303,13 @@ const Dashboard = () => {
                     {errorsJob.status === 'processing' ? ' (still processing — updates as rows fail)' : ''}
                   </p>
                 </div>
-                <button type="button" className="btn btn-ghost" onClick={() => setErrorsJobId(null)}>
-                  Close
-                </button>
+                <div className="err-panel-actions">
+                  <DownloadButton label="Report CSV" title="Download every failed row with its reason" fetcher={() => downloadErrorReport(errorsJob.jobId, 'csv', token)} />
+                  <DownloadButton label="Report JSON" fetcher={() => downloadErrorReport(errorsJob.jobId, 'json', token)} />
+                  <button type="button" className="btn btn-ghost btn-small" onClick={() => setErrorsJobId(null)}>
+                    Close
+                  </button>
+                </div>
               </div>
 
               {errorsState.status === 'loading' && (
@@ -312,6 +349,8 @@ const Dashboard = () => {
             filtered={isFiltered}
             onViewErrors={handleViewErrors}
             selectedJobId={errorsJobId}
+            token={token}
+            showOwner={scope === 'all'}
           />
 
           {paged.total > PAGE_SIZE && (

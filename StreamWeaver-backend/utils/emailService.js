@@ -3,7 +3,9 @@ const nodemailer = require("nodemailer");
 // If SMTP env vars aren't set, log the reset link instead of sending a
 // real email so testing never blocks on having a mail account configured.
 exports.sendPasswordResetEmail = async (toEmail, resetToken) => {
-  const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
+  // FRONTEND_URL = where the React app is served (Vite dev default: 5173).
+  const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+  const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
     console.log("📧 [DEV MODE] Password reset link (SMTP not configured):");

@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 import ErrorBadge from './ErrorBadge';
+import DownloadButton from './DownloadButton';
+import { downloadDataset } from '../api/exportApi';
 import {
   formatBytes,
   formatCount,
@@ -29,13 +31,22 @@ const SortHeader = ({ label, sortKey, sort, onSort, numeric = false }) => {
   );
 };
 
-const HistoryTable = ({ jobs = [], sort, onSort, filtered = false, onViewErrors, selectedJobId = null }) => {
+const HistoryTable = ({
+  jobs = [],
+  sort,
+  onSort,
+  filtered = false,
+  onViewErrors,
+  selectedJobId = null,
+  token = '',
+  showOwner = false,
+}) => {
   if (jobs.length === 0) {
     return filtered ? (
       <p className="history-empty">No files match your search or filter.</p>
     ) : (
       <p className="history-empty">
-        No uploads yet. <Link to="/upload">Upload your first file</Link> to see it here.
+        No imports yet. <Link to="/upload">Import your first file</Link> to see it here.
       </p>
     );
   }
@@ -50,6 +61,7 @@ const HistoryTable = ({ jobs = [], sort, onSort, filtered = false, onViewErrors,
             <SortHeader label="Rows" sortKey="totalRows" sort={sort} onSort={onSort} numeric />
             <SortHeader label="Failed" sortKey="rowsFailed" sort={sort} onSort={onSort} numeric />
             <th>Status</th>
+            {token && <th>Export</th>}
           </tr>
         </thead>
         <tbody>
@@ -60,6 +72,11 @@ const HistoryTable = ({ jobs = [], sort, onSort, filtered = false, onViewErrors,
                 <td className="col-file">
                   <span className="file-name" title={job.fileName}>{job.fileName || '—'}</span>
                   <span className="file-size">{formatBytes(job.sizeBytes)}</span>
+                  {showOwner && job.owner && (
+                    <span className="file-owner" title={job.owner.email}>
+                      {job.owner.name || job.owner.email}
+                    </span>
+                  )}
                 </td>
                 <td title={job.uploadedAt ? new Date(job.uploadedAt).toLocaleString() : ''}>
                   {timeAgo(job.uploadedAt)}
@@ -94,6 +111,18 @@ const HistoryTable = ({ jobs = [], sort, onSort, filtered = false, onViewErrors,
                     <span className="row-note row-note-failed">{job.errorMessage}</span>
                   )}
                 </td>
+                {token && (
+                  <td className="col-export">
+                    {job.status === 'done' ? (
+                      <span className="export-buttons">
+                        <DownloadButton label="CSV" title="Download the cleaned data as CSV" fetcher={() => downloadDataset(job.id, 'csv', token)} />
+                        <DownloadButton label="JSON" title="Download the cleaned data as JSON" fetcher={() => downloadDataset(job.id, 'json', token)} />
+                      </span>
+                    ) : (
+                      <span className="row-note">—</span>
+                    )}
+                  </td>
+                )}
               </tr>
             );
           })}

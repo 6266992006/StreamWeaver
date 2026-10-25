@@ -48,6 +48,9 @@ class CsvRowToJsonStream extends Transform {
     try {
       const fields = splitCsvLine(line);
       if (!this._headers) {
+        // Excel's "CSV UTF-8" starts the file with a BOM that would otherwise
+        // glue itself onto the first column name and break the mapping.
+        if (fields.length > 0) fields[0] = fields[0].replace(/^\uFEFF/, "");
         this._headers = fields;
         return callback();
       }

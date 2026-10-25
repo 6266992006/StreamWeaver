@@ -98,11 +98,11 @@
 
 .btn-primary {
   background: var(--accent);
-  color: #14100A;
+  color: var(--on-accent);
 }
 
 .btn-primary:hover {
-  background: #f0af52;
+  background: var(--accent-hover);
 }
 
 .btn-ghost {

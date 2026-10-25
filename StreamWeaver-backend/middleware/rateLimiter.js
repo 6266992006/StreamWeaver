@@ -14,7 +14,7 @@ const rateLimit = require("express-rate-limit");
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,
+  max: Number(process.env.RATE_LIMIT_MAX) || 1000, // env-tunable; a live dashboard polls
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: "Too many requests, please try again later" },
@@ -22,7 +22,7 @@ const generalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // only 10 signup/login attempts per IP per window
+  max: Number(process.env.AUTH_RATE_LIMIT_MAX) || 10, // only 10 signup/login attempts per IP per window
   standardHeaders: true,
   legacyHeaders: false,
   message: {

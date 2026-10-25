@@ -10,7 +10,23 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap"
       rel="stylesheet"
     />
+    <meta name="color-scheme" content="dark light" />
     <title>StreamWeaver</title>
+    <script>
+      // Apply the saved (or OS) theme before first paint so there's no flash.
+      // Keep in sync with src/styles/theme.js.
+      (function () {
+        try {
+          var saved = localStorage.getItem('sw-theme');
+          var theme = saved === 'light' || saved === 'dark'
+            ? saved
+            : window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
